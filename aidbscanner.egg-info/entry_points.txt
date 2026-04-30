@@ -1,0 +1,3 @@
+[console_scripts]
+aidb-proxy = aidb_proxy.cli:cli
+aidb-scan = cli:cli

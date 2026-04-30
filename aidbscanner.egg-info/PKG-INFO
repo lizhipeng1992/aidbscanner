@@ -1,0 +1,856 @@
+Metadata-Version: 2.4
+Name: aidbscanner
+Version: 1.0.0
+Summary: AI Database Scanner - 基于本地 LLM 的 MySQL 数据库语义层扫描工具
+Author: AI DB Scanner Team
+License: MIT
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: fastapi>=0.104.0
+Requires-Dist: uvicorn>=0.24.0
+Requires-Dist: pydantic>=2.0.0
+Requires-Dist: pydantic-settings>=2.0.0
+Requires-Dist: mysql-connector-python>=8.0.0
+Requires-Dist: click>=8.0.0
+Requires-Dist: ollama>=0.1.0
+Requires-Dist: pymilvus>=2.3.0
+Provides-Extra: dev
+Requires-Dist: pytest>=7.0.0; extra == "dev"
+Requires-Dist: pytest-cov>=4.0.0; extra == "dev"
+
+# AI Database Scanner
+
+基于 LLM 的 MySQL 数据库语义层扫描工具，能够自动分析数据库表结构并提取业务语义信息。
+
+## 功能特性
+
+- **元数据扫描**：自动扫描 MySQL 数据库的表结构和字段信息
+- **语义分析**：使用 LLM 分析字段和表的业务含义
+- **多模型支持**：支持 Ollama 本地模型和 OpenAI 格式接口（OpenAI、Azure、vLLM 等）
+- **关系发现**：基于命名规则和数据匹配率发现潜在的外键关系
+- **数据分类**：自动识别维度、指标、事实等数据类别
+- **多接口支持**：提供 FastAPI REST API 和 CLI 命令行接口
+
+## 快速开始
+
+### 环境要求
+
+- Python 3.10+
+- MySQL 5.7+ / 8.0+
+- LLM 服务（二选一）：
+  - **Ollama** + 本地模型（推荐 `qwen2.5:7b`）
+  - **OpenAI 格式接口**（OpenAI API、Azure OpenAI、vLLM 等）
+
+### 安装
+
+```bash
+# 克隆项目
+git clone <repository-url>
+cd aidbscanner
+
+# 方式一：使用 pip 安装（推荐，可全局使用 CLI 命令）
+pip install -e .
+
+# 方式二：仅安装依赖（需通过 python -m 运行 CLI）
+pip install -r requirements.txt
+
+# 配置环境变量
+cp .env.example .env
+# 编辑 .env 文件，配置 MySQL 和 Ollama 连接信息
+```
+
+**注意：** 使用 `pip install -e .` 安装后，才能直接使用 `aidb-scan` 命令。否则需要使用 `python -m cli` 运行 CLI。
+
+### 配置说明
+
+编辑 `.env` 文件：
+
+```env
+# MySQL 连接
+MYSQL_HOST=localhost
+MYSQL_PORT=3306
+MYSQL_USER=root
+MYSQL_PASSWORD=your_password
+MYSQL_DATABASE=
+
+# Milvus 向量数据库（可选）
+MILVUS_HOST=localhost
+MILVUS_PORT=19530
+MILVUS_COLLECTION=semantic_store
+
+# LLM 提供商选择：ollama 或 openai
+LLM_PROVIDER=ollama
+
+# Ollama 配置 (当 LLM_PROVIDER=ollama 时使用)
+OLLAMA_HOST=http://localhost:11434
+OLLAMA_MODEL=qwen2.5:7b
+OLLAMA_TIMEOUT=120
+
+# OpenAI 格式接口配置 (当 LLM_PROVIDER=openai 时使用)
+# 可用于：OpenAI 官方 API、Azure OpenAI、vLLM、其他兼容接口
+OPENAI_BASE_URL=https://api.openai.com/v1
+OPENAI_API_KEY=your_api_key
+OPENAI_MODEL=gpt-3.5-turbo
+OPENAI_TIMEOUT=120
+
+# 关系匹配阈值 (0-1)
+RELATIONSHIP_MATCH_THRESHOLD=0.95
+
+# 示例数据大小
+SAMPLE_DATA_SIZE=5
+
+# 语义存储类型：chroma（ChromaDB）或 milvus（向量数据库）
+SEMANTIC_STORAGE_TYPE=chroma
+SEMANTIC_STORAGE_PATH=./data/chroma
+
+# 运行模式：auto（自动保存）或 review（需人工审核）
+RUNTIME_MODE=auto
+```
+
+**LLM 提供商说明：**
+
+| 配置项 | Ollama | OpenAI 格式 |
+|--------|--------|-------------|
+| `LLM_PROVIDER` | `ollama` | `openai` |
+| 适用场景 | 本地部署，免费 | 云端 API 或自托管兼容接口 |
+| 兼容服务 | Ollama | OpenAI、Azure OpenAI、vLLM、OpenRouter 等 |
+
+---
+
+### 语义存储配置
+
+#### ChromaDB 存储（默认）
+
+```bash
+SEMANTIC_STORAGE_TYPE=chroma
+SEMANTIC_STORAGE_PATH=./data/chroma
+```
+
+**存储结构**：
+```
+./data/chroma/
+├── chroma.sqlite3      # ChromaDB 元数据
+├── chroma.parquet      # 向量数据
+└── ...                 # ChromaDB 内部文件
+```
+
+**优势**：
+- ✅ 无需额外服务，本地持久化
+- ✅ 支持向量相似度搜索，实现语义查询
+- ✅ 自动管理索引和元数据
+
+#### Milvus 向量数据库存储
+
+```bash
+# 语义存储类型
+SEMANTIC_STORAGE_TYPE=milvus
+
+# Milvus 连接配置
+MILVUS_HOST=localhost
+MILVUS_PORT=19530
+MILVUS_COLLECTION=db_semantics
+MILVUS_VECTOR_DIM=768
+
+# 嵌入服务配置（用于向量检索）
+EMBEDDING_PROVIDER=ollama
+EMBEDDING_MODEL=nomic-embed-text
+```
+
+**前提条件**：
+- 运行中的 Milvus 服务器（本地或云端）
+- Ollama 服务及嵌入模型（默认：`nomic-embed-text`，768 维度）
+
+**安装嵌入模型**：
+```bash
+ollama pull nomic-embed-text
+```
+
+**优势**：
+- ✅ 大规模数据存储和检索性能更优
+- ✅ 支持跨表、跨数据库的语义关联查询
+
+**存储模式对比**：
+
+| 特性 | ChromaDB 存储 | Milvus 向量存储 |
+|------|-------------|----------------|
+| 部署复杂度 | 无需额外服务 | 需部署 Milvus |
+| 数据规模 | 适合中小规模 | 适合大规模 |
+| 查询能力 | 向量相似度搜索 | 向量相似度搜索 |
+| 语义检索 | ✅ | ✅ |
+| 跨库关联 | ✅ | ✅ |
+
+## 使用方式
+
+### CLI 命令行
+
+#### 命令列表
+
+| 命令 | 描述 |
+|------|------|
+| `health` | 检查服务健康状态 |
+| `databases` | 列出所有数据库 |
+| `tables <db>` | 列出指定数据库的所有表 |
+| `field <db> <table> <column>` | 分析单个字段的语义 |
+| `analyze <db> <table>` | 分析整张表的语义 |
+| `scan <db>` | 全量扫描数据库并分析语义 |
+| `review-pending` | 列出待审核字段 |
+| `review-interactive` | 交互式审核 |
+| `review-submit` | 批量确认字段 |
+| `review-reject` | 批量拒绝字段 |
+| `review-modify` | 修改并确认字段 |
+
+#### 健康检查
+
+检查 MySQL 和 LLM 服务连接状态：
+
+```bash
+aidb-scan health
+```
+
+输出示例：
+```json
+{
+  "status": "healthy",
+  "mysql": "connected",
+  "llm": "connected",
+  "llm_provider": "ollama"
+}
+```
+
+#### 列出数据库
+
+```bash
+aidb-scan databases
+```
+
+输出示例：
+```
+可用数据库:
+  - ecommerce
+  - user_system
+  - analytics
+```
+
+#### 列出表
+
+```bash
+aidb-scan tables ecommerce
+```
+
+输出示例：
+```
+数据库 [ecommerce] 的表:
+
+  orders
+    说明：订单表
+    引擎：InnoDB
+    字段数：12
+
+  products
+    说明：商品表
+    引擎：InnoDB
+    字段数：15
+```
+
+#### 分析字段语义
+
+```bash
+aidb-scan field ecommerce orders user_id
+```
+
+输出示例：
+```json
+{
+  "column_name": "user_id",
+  "data_type": "bigint",
+  "chinese_name": "用户 ID",
+  "business_definition": "下单用户的唯一标识符，关联用户表",
+  "value_rules": "正整数，外键引用 users.id",
+  "related_fields": ["users.id", "users.user_id"],
+  "data_category": "dimension"
+}
+```
+
+#### 分析表语义
+
+```bash
+aidb-scan analyze ecommerce orders --sample-size 10
+```
+
+输出示例：
+```json
+{
+  "table_name": "orders",
+  "chinese_name": "订单表",
+  "business_definition": "记录用户下单信息，包含订单状态、金额、时间等核心业务数据",
+  "data_category": "fact",
+  "fields": [
+    {
+      "column_name": "id",
+      "chinese_name": "订单 ID",
+      "business_definition": "订单唯一标识",
+      "data_category": "other"
+    },
+    {
+      "column_name": "total_amount",
+      "chinese_name": "订单金额",
+      "business_definition": "订单总金额",
+      "data_category": "metric"
+    }
+  ]
+}
+```
+
+#### 全量扫描数据库
+
+```bash
+aidb-scan scan ecommerce --sample-size 5 --verify-relationships
+```
+
+此命令会：
+1. 扫描数据库中所有表
+2. 分析每个字段的语义
+3. 发现并验证表间关系
+
+#### CLI 命令选项
+
+| 选项 | 描述 | 默认值 |
+|------|------|--------|
+| `--sample-size N` | 示例数据行数 (1-20) | 5 |
+| `--verify-relationships` | 是否验证表间关系 | true |
+
+---
+
+### 运行模式切换
+
+工具支持两种运行模式：
+
+| 模式 | 说明 | 字段状态 |
+|------|------|----------|
+| `auto` | LLM 分析结果直接保存 | `AUTO` |
+| `review` | LLM 分析结果待人工审核 | `PENDING` |
+
+#### 方式 1: 在 `.env` 文件中设置
+
+```bash
+# 自动模式 - LLM 分析结果直接保存
+RUNTIME_MODE=auto
+
+# 审核模式 - LLM 分析结果待人工审核
+RUNTIME_MODE=review
+```
+
+#### 方式 2: 命令行临时设置
+
+**Linux/Mac:**
+```bash
+# auto 模式
+RUNTIME_MODE=auto aidb-scan scan test_db
+
+# review 模式
+RUNTIME_MODE=review aidb-scan scan test_db
+```
+
+**Windows (CMD):**
+```cmd
+set RUNTIME_MODE=auto && aidb-scan scan test_db
+set RUNTIME_MODE=review && aidb-scan scan test_db
+```
+
+**Windows (PowerShell):**
+```powershell
+$env:RUNTIME_MODE="auto"; aidb-scan scan test_db
+$env:RUNTIME_MODE="review"; aidb-scan scan test_db
+```
+
+---
+
+### 审核模式使用说明
+
+在 `review` 模式下，LLM 分析结果会标记为 `PENDING` 状态，需要人工审核确认后才能保存。
+
+#### 列出待审核字段
+
+```bash
+# 列出所有待审核字段
+aidb-scan review-pending
+
+# 按数据库过滤
+aidb-scan review-pending --db-name test_db
+```
+
+#### 交互式审核
+
+```bash
+aidb-scan review-interactive
+```
+
+操作选项：
+- `y` - 确认字段
+- `m` - 修改字段值后确认
+- `n` - 拒绝字段
+- `s` - 跳过字段
+
+#### 批量确认字段
+
+```bash
+aidb-scan review-submit test_db.users.id test_db.orders.user_id --calibrated-by "admin"
+```
+
+#### 批量拒绝字段
+
+```bash
+aidb-scan review-reject test_db.users.id
+```
+
+#### 修改并确认字段
+
+```bash
+aidb-scan review-modify test_db.users.email \
+    --chinese-name "用户邮箱" \
+    --business-definition "用户注册邮箱地址" \
+    --data-category "dimension" \
+    --calibrated-by "admin"
+```
+
+#### 字段 ID 格式
+
+```
+db_name.table_name.column_name
+```
+
+例如：`test_db.users.id`
+
+#### 使用 python -m 运行
+
+如果未使用 `pip install -e .` 安装，可通过以下方式运行：
+
+```bash
+python -m cli health
+python -m cli databases
+python -m cli tables ecommerce
+python -m cli field ecommerce orders user_id
+python -m cli analyze ecommerce orders --sample-size 10
+python -m cli scan ecommerce --sample-size 5
+```
+
+### FastAPI REST API
+
+#### 启动服务
+
+```bash
+uvicorn app:app --host 0.0.0.0 --port 8000 --reload
+```
+
+启动后访问 `http://localhost:8000/docs` 查看交互式 API 文档。
+
+#### API 端点
+
+| 方法 | 路径 | 描述 |
+|------|------|------|
+| GET | `/health` | 健康检查 |
+| GET | `/databases` | 列出所有数据库 |
+| GET | `/databases/{db_name}/tables` | 列出指定数据库的表 |
+| POST | `/fields/analyze` | 分析字段语义 |
+| POST | `/tables/analyze` | 分析表语义 |
+| POST | `/relationships/verify` | 验证表间关系 |
+| POST | `/discover/relationships` | 发现潜在关系 |
+| POST | `/scan` | 全量扫描数据库 |
+
+#### 健康检查
+
+```bash
+curl http://localhost:8000/health
+```
+
+响应：
+```json
+{
+  "status": "healthy",
+  "mysql": "connected",
+  "llm": "connected",
+  "llm_provider": "ollama",
+  "timestamp": "2026-04-24T10:30:00"
+}
+```
+
+#### 列出数据库
+
+```bash
+curl http://localhost:8000/databases
+```
+
+响应：
+```json
+{
+  "databases": ["ecommerce", "user_system", "analytics"]
+}
+```
+
+#### 列出表
+
+```bash
+curl http://localhost:8000/databases/ecommerce/tables
+```
+
+响应：
+```json
+{
+  "database": "ecommerce",
+  "tables": [
+    {
+      "table_name": "orders",
+      "table_comment": "订单表",
+      "engine": "InnoDB",
+      "columns": [...]
+    }
+  ]
+}
+```
+
+#### 分析字段语义
+
+```bash
+curl -X POST http://localhost:8000/fields/analyze \
+  -H "Content-Type: application/json" \
+  -d '{
+    "db_name": "ecommerce",
+    "table_name": "orders",
+    "column_name": "user_id"
+  }'
+```
+
+响应：
+```json
+{
+  "id": "ecommerce.orders.user_id",
+  "db_name": "ecommerce",
+  "table_name": "orders",
+  "column_name": "user_id",
+  "data_type": "bigint",
+  "chinese_name": "用户 ID",
+  "business_definition": "下单用户的唯一标识符",
+  "value_rules": "正整数，外键引用",
+  "related_fields": ["users.id"],
+  "data_category": "dimension",
+  "status": "completed"
+}
+```
+
+#### 分析表语义
+
+```bash
+curl -X POST http://localhost:8000/tables/analyze \
+  -H "Content-Type: application/json" \
+  -d '{
+    "db_name": "ecommerce",
+    "table_name": "orders",
+    "sample_size": 10
+  }'
+```
+
+响应：
+```json
+{
+  "table_name": "orders",
+  "db_name": "ecommerce",
+  "chinese_name": "订单表",
+  "business_definition": "记录用户下单信息...",
+  "data_category": "fact",
+  "fields": [...]
+}
+```
+
+#### 验证表间关系
+
+```bash
+curl -X POST http://localhost:8000/relationships/verify \
+  -H "Content-Type: application/json" \
+  -d '{
+    "db_name": "ecommerce",
+    "source_table": "orders",
+    "source_column": "user_id",
+    "target_table": "users",
+    "target_column": "id"
+  }'
+```
+
+响应：
+```json
+{
+  "source_table": "orders",
+  "source_column": "user_id",
+  "target_table": "users",
+  "target_column": "id",
+  "relationship_type": "many-to-one",
+  "match_rate": 0.98,
+  "verified": true
+}
+```
+
+#### 发现潜在关系
+
+```bash
+curl -X POST http://localhost:8000/discover/relationships \
+  -H "Content-Type: application/json" \
+  -d '{"db_name": "ecommerce"}'
+```
+
+响应：
+```json
+[
+  {
+    "source_table": "orders",
+    "source_column": "user_id",
+    "target_table": "users",
+    "target_column": "id",
+    "relationship_type": "many-to-one",
+    "match_rate": 0.98,
+    "verified": true
+  }
+]
+```
+
+#### 全量扫描数据库
+
+```bash
+curl -X POST http://localhost:8000/scan \
+  -H "Content-Type: application/json" \
+  -d '{
+    "db_name": "ecommerce",
+    "sample_size": 5,
+    "verify_relationships": true
+  }'
+```
+
+响应包含所有表的语义分析和发现的关系。
+
+#### 使用 HTTPie（更简洁）
+
+```bash
+# 健康检查
+http localhost:8000/health
+
+# 列出数据库
+http localhost:8000/databases
+
+# 分析字段
+http POST localhost:8000/fields/analyze \
+  db_name=ecommerce \
+  table_name=orders \
+  column_name=user_id
+```
+
+### Python SDK
+
+#### 基础使用
+
+```python
+from core.scanner import MySQLScanner
+from core.semantic_analyzer import SemanticAnalyzer
+
+# 自动根据 .env 配置创建 LLM 客户端
+scanner = MySQLScanner()
+analyzer = SemanticAnalyzer(scanner=scanner)
+
+with scanner:
+    # 扫描数据库
+    tables = scanner.scan_database("my_database")
+    
+    # 分析表语义
+    for table in tables:
+        table_semantic = analyzer.analyze_table(table, "my_database")
+        print(f"表：{table_semantic.chinese_name}")
+        print(f"定义：{table_semantic.business_definition}")
+```
+
+#### 手动指定 LLM 客户端
+
+```python
+from core.llm_client import OllamaClient, OpenAIClient
+
+# 使用 Ollama
+ollama_client = OllamaClient(
+    host="http://localhost:11434",
+    model="qwen2.5:7b"
+)
+analyzer = SemanticAnalyzer(scanner=scanner, llm_client=ollama_client)
+
+# 使用 OpenAI 格式接口
+openai_client = OpenAIClient(
+    base_url="https://api.openai.com/v1",
+    api_key="sk-xxx",
+    model="gpt-3.5-turbo"
+)
+analyzer = SemanticAnalyzer(scanner=scanner, llm_client=openai_client)
+```
+
+#### 分析单个字段
+
+```python
+from core.scanner import MySQLScanner
+from core.semantic_analyzer import SemanticAnalyzer
+
+scanner = MySQLScanner()
+analyzer = SemanticAnalyzer(scanner=scanner)
+
+with scanner:
+    # 获取表元数据
+    tables = scanner.scan_database("ecommerce")
+    orders_table = next(t for t in tables if t.table_name == "orders")
+    user_id_col = next(c for c in orders_table.columns if c.column_name == "user_id")
+    
+    # 获取示例数据
+    sample_values = scanner.get_sample_data("ecommerce", "orders", "user_id", limit=5)
+    
+    # 分析字段语义
+    semantic = analyzer.analyze_field(user_id_col, "orders", "ecommerce", sample_values)
+    
+    print(f"中文名称：{semantic.chinese_name}")
+    print(f"业务定义：{semantic.business_definition}")
+    print(f"数据分类：{semantic.data_category.value}")
+```
+
+#### 批量分析表
+
+```python
+scanner = MySQLScanner()
+analyzer = SemanticAnalyzer(scanner=scanner)
+
+with scanner:
+    tables = scanner.scan_database("ecommerce")
+    
+    # 批量分析所有表
+    table_semantics = analyzer.batch_analyze_tables(
+        tables, 
+        "ecommerce", 
+        sample_data_size=5
+    )
+    
+    for ts in table_semantics:
+        print(f"\n表：{ts.chinese_name} ({ts.table_name})")
+        print(f"分类：{ts.data_category.value}")
+        for fs in ts.field_semantics:
+            print(f"  - {fs.column_name}: {fs.chinese_name}")
+```
+
+#### 发现表间关系
+
+```python
+from core.scanner import MySQLScanner
+from core.semantic_analyzer import SemanticAnalyzer
+from config.settings import settings
+
+scanner = MySQLScanner()
+analyzer = SemanticAnalyzer(scanner=scanner)
+
+with scanner:
+    tables = scanner.scan_database("ecommerce")
+    
+    # 发现候选关系
+    candidates = scanner.discover_foreign_key_candidates(tables)
+    
+    for rel in candidates:
+        # 计算匹配率
+        match_rate = scanner.calculate_match_rate("ecommerce", rel)
+        rel.match_rate = match_rate
+        
+        if match_rate >= settings.relationship_match_threshold:
+            # 使用 LLM 验证
+            is_valid = analyzer.verify_relationship(rel)
+            rel.verified = is_valid
+            
+            if is_valid:
+                print(f"发现关系：{rel.source_table}.{rel.source_column} "
+                      f"-> {rel.target_table}.{rel.target_column}")
+```
+
+#### 使用工厂函数创建客户端
+
+```python
+from core.llm_client import LLMProvider, create_llm_client
+
+# 创建 Ollama 客户端
+client = create_llm_client(LLMProvider.OLLAMA, {
+    "host": "http://localhost:11434",
+    "model": "qwen2.5:7b"
+})
+
+# 创建 OpenAI 客户端
+client = create_llm_client(LLMProvider.OPENAI, {
+    "base_url": "https://api.openai.com/v1",
+    "api_key": "sk-xxx",
+    "model": "gpt-3.5-turbo"
+})
+
+analyzer = SemanticAnalyzer(scanner=scanner, llm_client=client)
+```
+
+## 项目结构
+
+```
+aidbscanner/
+├── app/                    # FastAPI 应用层
+│   ├── __init__.py        # API 端点定义
+│   └── schemas.py         # Pydantic 数据模型
+├── cli/                    # CLI 命令行接口
+│   └── __init__.py        # Click 命令定义
+├── config/                 # 配置管理
+│   ├── __init__.py
+│   └── settings.py        # 配置类
+├── core/                   # 核心模块
+│   ├── __init__.py
+│   ├── chroma_store.py    # ChromaDB 向量存储
+│   ├── llm_client.py      # LLM 客户端抽象层
+│   ├── models.py          # 数据模型
+│   ├── scanner.py         # MySQL 扫描器
+│   └── semantic_analyzer.py # 语义分析器
+├── tests/                  # 单元测试
+│   ├── test_models.py
+│   ├── test_scanner.py
+│   └── test_semantic_analyzer.py
+├── .env.example           # 环境变量示例
+├── pytest.ini             # Pytest 配置
+├── requirements.txt       # 依赖列表
+└── README.md              # 项目文档
+```
+
+## 运行测试
+
+```bash
+# 运行所有测试
+pytest
+
+# 运行特定测试文件
+pytest tests/test_scanner.py -v
+
+# 运行带覆盖率报告
+pytest --cov=core --cov-report=html
+```
+
+## 核心概念
+
+### 数据分类
+
+- **Dimension（维度）**：描述业务实体的属性，如用户、产品
+- **Metric（指标）**：可量化的业务度量，如销售额、数量
+- **Fact（事实）**：记录业务事件的数据，如订单、交易
+- **Other（其他）**：无法归类的字段
+
+### 关系发现
+
+工具通过以下两步发现外键关系：
+
+1. **命名规则匹配**：识别 `_id` 后缀字段，匹配可能的目标表
+2. **数据匹配率计算**：通过 SQL JOIN 计算值匹配率，使用 LLM 验证语义合理性
+
+## 许可证
+
+MIT License
