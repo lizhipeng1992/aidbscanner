@@ -5,11 +5,12 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 
 from config.settings import settings
 
-PID_FILE = Path.home() / ".aidb-proxy.pid"
+BACKEND_PID_FILE = Path.home() / ".aidb-proxy-backend.pid"
+FRONTEND_PID_FILE = Path.home() / ".aidb-proxy-frontend.pid"
 LOG_FILE = Path.home() / ".aidb-proxy.log"
 TIMEOUT = 10  # 停止超时时间
 
@@ -18,14 +19,11 @@ def _is_process_running(pid: int) -> bool:
     """检查进程是否运行（跨平台）"""
     if sys.platform == "win32":
         try:
-            subprocess.run(
+            result = subprocess.run(
                 ["tasklist", "/FI", f"PID eq {pid}"],
                 capture_output=True, text=True, timeout=5
             )
-            return f"{pid}" in subprocess.run(
-                ["tasklist", "/FI", f"PID eq {pid}"],
-                capture_output=True, text=True, timeout=5
-            ).stdout
+            return str(pid) in result.stdout
         except Exception:
             return False
     else:
@@ -50,58 +48,29 @@ def _kill_process(pid: int, sig: int = signal.SIGTERM) -> None:
             pass
 
 
-def start_service(host: Optional[str] = None, port: Optional[int] = None, foreground: bool = False) -> int:
-    """
-    启动服务
-
-    Args:
-        host: 监听地址，None 则使用配置
-        port: 监听端口，None 则使用配置
-        foreground: 是否前台运行
-
-    Returns:
-        进程 PID
-    """
-    # 检查是否已运行
-    pid = _read_pid()
-    if pid and _is_process_running(pid):
-        raise RuntimeError(f"服务已在运行 (PID: {pid})")
-
-    # 确保日志目录存在
-    LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
-
-    # 构建命令
-    cmd = _get_uvicorn_command(host or settings.api_host, port or settings.api_port)
-
-    # 启动进程
-    if foreground:
-        proc = subprocess.run(cmd)
-        return 0
-    else:
-        proc = subprocess.Popen(
-            cmd,
-            stdout=open(LOG_FILE, "a"),
-            stderr=subprocess.STDOUT,
-            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == "win32" else 0,
-        )
-        _write_pid(proc.pid)
-        return proc.pid
+def _read_pid(pid_file: Path) -> Optional[int]:
+    """读取 PID 文件"""
+    if pid_file.exists():
+        try:
+            return int(pid_file.read_text().strip())
+        except ValueError:
+            _remove_pid(pid_file)
+    return None
 
 
-def stop_service() -> bool:
-    """停止服务"""
-    pid = _read_pid()
-    if not pid:
-        return False
+def _write_pid(pid_file: Path, pid: int) -> None:
+    """写入 PID 文件"""
+    pid_file.write_text(str(pid))
 
-    if not _is_process_running(pid):
-        _remove_pid()
-        return False
 
-    # 发送 SIGTERM
-    _kill_process(pid)
+def _remove_pid(pid_file: Path) -> None:
+    """删除 PID 文件"""
+    if pid_file.exists():
+        pid_file.unlink()
 
-    # 等待进程结束
+
+def _wait_for_process(pid: int) -> None:
+    """等待进程结束"""
     for _ in range(TIMEOUT):
         if not _is_process_running(pid):
             break
@@ -111,52 +80,132 @@ def stop_service() -> bool:
     if _is_process_running(pid):
         _kill_process(pid, signal.SIGKILL)
 
-    _remove_pid()
-    return True
+
+def start_service(
+    host: Optional[str] = None,
+    port: Optional[int] = None,
+    web_port: Optional[int] = None,
+    start_web: bool = True
+) -> Tuple[int, Optional[int]]:
+    """
+    启动服务（后端 + 前端）
+
+    Args:
+        host: 后端监听地址，None 则使用配置
+        port: 后端监听端口，None 则使用配置
+        web_port: 前端端口，None 则使用默认 5173
+        start_web: 是否启动前端开发服务器
+
+    Returns:
+        (backend_pid, frontend_pid) 进程 PID 元组，前端未启动时 frontend_pid 为 None
+    """
+    # 检查后端是否已运行
+    backend_pid = _read_pid(BACKEND_PID_FILE)
+    if backend_pid and _is_process_running(backend_pid):
+        raise RuntimeError(f"后端服务已在运行 (PID: {backend_pid})")
+
+    # 确保日志目录存在
+    LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+
+    # 构建后端命令
+    backend_cmd = _get_uvicorn_command(host or settings.api_host, port or settings.api_port)
+
+    # 启动后端进程
+    backend_proc = subprocess.Popen(
+        backend_cmd,
+        stdout=open(LOG_FILE, "a"),
+        stderr=subprocess.STDOUT,
+        creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == "win32" else 0,
+    )
+    _write_pid(BACKEND_PID_FILE, backend_proc.pid)
+
+    # 启动前端进程（如果启用）
+    frontend_pid = None
+    if start_web:
+        web_dir = Path(__file__).parent.parent / "web"
+        frontend_cmd = _get_vite_command(web_port or 5173)
+        try:
+            frontend_proc = subprocess.Popen(
+                frontend_cmd,
+                stdout=open(LOG_FILE, "a"),
+                stderr=subprocess.STDOUT,
+                cwd=str(web_dir),
+                creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == "win32" else 0,
+            )
+            _write_pid(FRONTEND_PID_FILE, frontend_proc.pid)
+            frontend_pid = frontend_proc.pid
+        except FileNotFoundError:
+            # npm 不可用时，只启动后端
+            pass
+
+    return backend_proc.pid, frontend_pid
+
+
+def stop_service() -> Tuple[bool, Optional[bool]]:
+    """
+    停止服务（后端 + 前端）
+
+    Returns:
+        (backend_stopped, frontend_stopped) 停止结果元组
+        - backend_stopped: 后端是否成功停止（False 表示未运行）
+        - frontend_stopped: 前端是否成功停止（None 表示未启动，False 表示未运行，True 表示已停止）
+    """
+    backend_stopped = False
+    frontend_stopped = None
+
+    # 停止后端
+    backend_pid = _read_pid(BACKEND_PID_FILE)
+    if backend_pid:
+        if _is_process_running(backend_pid):
+            _kill_process(backend_pid)
+            _wait_for_process(backend_pid)
+            backend_stopped = True
+        _remove_pid(BACKEND_PID_FILE)
+
+    # 停止前端
+    frontend_pid = _read_pid(FRONTEND_PID_FILE)
+    if frontend_pid:
+        if _is_process_running(frontend_pid):
+            _kill_process(frontend_pid)
+            _wait_for_process(frontend_pid)
+            frontend_stopped = True
+        _remove_pid(FRONTEND_PID_FILE)
+    else:
+        frontend_stopped = None
+
+    return backend_stopped, frontend_stopped
 
 
 def service_status() -> dict:
     """
-    返回服务状态
+    返回服务状态（后端 + 前端）
 
     Returns:
         {
-            "running": bool,
-            "pid": int or None,
+            "backend_running": bool,
+            "backend_pid": int or None,
+            "frontend_running": bool,
+            "frontend_pid": int or None,
             "host": str,
             "port": int,
+            "web_port": int or None,
         }
     """
-    pid = _read_pid()
-    running = pid is not None and _is_process_running(pid)
+    backend_pid = _read_pid(BACKEND_PID_FILE)
+    backend_running = backend_pid is not None and _is_process_running(backend_pid)
+
+    frontend_pid = _read_pid(FRONTEND_PID_FILE)
+    frontend_running = frontend_pid is not None and _is_process_running(frontend_pid)
 
     return {
-        "running": running,
-        "pid": pid if running else None,
+        "backend_running": backend_running,
+        "backend_pid": backend_pid if backend_running else None,
+        "frontend_running": frontend_running,
+        "frontend_pid": frontend_pid if frontend_running else None,
         "host": settings.api_host,
         "port": settings.api_port,
+        "web_port": 5173,  # Vite 默认端口
     }
-
-
-def _read_pid() -> Optional[int]:
-    """读取 PID 文件"""
-    if PID_FILE.exists():
-        try:
-            return int(PID_FILE.read_text().strip())
-        except ValueError:
-            _remove_pid()
-    return None
-
-
-def _write_pid(pid: int) -> None:
-    """写入 PID 文件"""
-    PID_FILE.write_text(str(pid))
-
-
-def _remove_pid() -> None:
-    """删除 PID 文件"""
-    if PID_FILE.exists():
-        PID_FILE.unlink()
 
 
 def _get_uvicorn_command(host: str, port: int) -> list:
@@ -166,4 +215,14 @@ def _get_uvicorn_command(host: str, port: int) -> list:
         "aidb_proxy.main:app",
         "--host", host,
         "--port", str(port),
+    ]
+
+
+def _get_vite_command(port: int) -> list:
+    """构建 Vite 开发服务器命令"""
+    # Windows 上使用 npm.cmd
+    npm_cmd = "npm.cmd" if sys.platform == "win32" else "npm"
+    return [
+        npm_cmd, "run", "dev",
+        "--", "--port", str(port), "--host"
     ]
