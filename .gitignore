@@ -1,0 +1,18 @@
+# Python 缓存与字节码
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Python 打包/环境相关
+*.egg-info/
+.env
+
+# 测试与临时数据
+.pytest_cache/
+data/chroma/
+data/chroma_test/
+data/chroma_test_related/
+*.sqlite3
+
+# 其他临时文件
+todo.md

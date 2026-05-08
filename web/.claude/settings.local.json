@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(netstat -ano)",
+      "Bash(tasklist /FI \"PID eq $\\(cat ~/.aidb-proxy.pid 2>/dev/null\\)\")",
+      "Bash(aidb-proxy start *)",
+      "Bash(curl *)",
+      "Bash(npx tsc *)",
+      "Bash(python -m pytest tests/test_semantic_cache.py -v)",
+      "Bash(python -c \"from aidb_proxy.service import start_service, stop_service, service_status, FrontendService; print\\('Import OK'\\)\")",
+      "Bash(python -c \"from aidb_proxy.cli import cli; print\\('CLI import OK'\\)\")",
+      "Bash(python -m aidb_proxy.cli status)",
+      "Bash(aidb-proxy status *)",
+      "Bash(aidb-proxy --help)",
+      "Bash(aidb-proxy stop *)",
+      "Bash(npm run *)",
+      "Bash(ps -p 11936 -o args=)",
+      "Bash(tasklist)",
+      "Bash(wmic process *)"
+    ]
+  }
+}
