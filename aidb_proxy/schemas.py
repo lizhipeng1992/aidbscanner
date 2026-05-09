@@ -200,3 +200,33 @@ class QueryResponse(BaseModel):
     relevant_tables: List[QueryTableResult] = []
     has_error: bool = False
     error_message: Optional[str] = None
+
+
+# ==================== 语义缓存相关模型 ====================
+
+class FieldSemanticCacheResponse(BaseModel):
+    """字段语义缓存响应"""
+    id: str
+    db_name: str
+    table_name: str
+    column_name: str
+    data_type: str = ""
+    chinese_name: Optional[str] = None
+    business_definition: Optional[str] = None
+    value_rules: Optional[str] = None
+    related_fields: List[str] = []
+    data_category: Optional[DataCategory] = None
+    status: Optional[ColumnType] = None
+    has_semantics: bool = False
+
+
+class TableSemanticCacheResponse(BaseModel):
+    """表语义缓存响应"""
+    id: str
+    db_name: str
+    table_name: str
+    chinese_name: Optional[str] = None
+    business_definition: Optional[str] = None
+    data_category: Optional[DataCategory] = None
+    has_semantics: bool = False
+    fields: Optional[List[FieldSemanticCacheResponse]] = None

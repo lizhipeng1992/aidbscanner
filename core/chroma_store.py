@@ -109,16 +109,19 @@ class ChromaStore:
         """
         try:
             results = self.collection.get(
-                where={"db_name": db_name, "table_name": table_name}
+                where={"$and": [{"db_name": db_name}, {"table_name": table_name}]}
             )
 
             if not results.get("ids"):
                 return None
 
+            # ChromaDB 返回的是 metadatas (复数)
+            metadata_list = results.get("metadatas", [])
+
             # 构建表语义数据结构
             fields = []
             for i, doc_id in enumerate(results.get("ids", [])):
-                meta = results["metadata"][i]
+                meta = metadata_list[i] if i < len(metadata_list) else {}
                 fields.append({
                     "column_name": meta.get("column_name"),
                     "data_type": meta.get("data_type"),
@@ -135,7 +138,7 @@ class ChromaStore:
                 })
 
             # 获取表级元数据（从第一个字段中提取）
-            first_meta = results["metadata"][0] if results.get("metadata") else {}
+            first_meta = metadata_list[0] if metadata_list else {}
 
             return {
                 "table_name": table_name,
@@ -159,12 +162,12 @@ class ChromaStore:
         try:
             results = self.collection.get(include=[])
             ids = results.get("ids", [])
-            metadata_list = results.get("metadata", [])
+            metadata_list = results.get("metadatas", [])
 
             # 按表分组
             tables = {}
             for i, doc_id in enumerate(ids):
-                meta = metadata_list[i]
+                meta = metadata_list[i] if i < len(metadata_list) else {}
                 db_name = meta.get("db_name")
                 table_name = meta.get("table_name")
                 key = f"{db_name}/{table_name}"
@@ -229,15 +232,18 @@ class ChromaStore:
             待审核字段列表
         """
         try:
-            where = {"status": "pending"}
+            where_conditions = [{"status": "pending"}]
             if db_name:
-                where["db_name"] = db_name
+                where_conditions.append({"db_name": db_name})
+
+            where = {"$and": where_conditions} if len(where_conditions) > 1 else where_conditions[0]
 
             results = self.collection.get(where=where)
+            metadata_list = results.get("metadatas", [])
 
             pending_fields = []
             for i, doc_id in enumerate(results.get("ids", [])):
-                meta = results["metadata"][i]
+                meta = metadata_list[i] if i < len(metadata_list) else {}
                 pending_fields.append({
                     "field_id": doc_id,
                     "db_name": meta.get("db_name"),
@@ -281,7 +287,7 @@ class ChromaStore:
                         updates[key] = value
 
             # 更新字段
-            self.collection.update(ids=[field_id], metadata=[updates])
+            self.collection.update(ids=[field_id], metadatas=[updates])
             logger.info(f"提交审核成功：{field_id}")
             return True
         except Exception as e:
@@ -300,7 +306,7 @@ class ChromaStore:
         try:
             self.collection.update(
                 ids=[field_id],
-                metadata=[{"status": "skipped", "updated_at": datetime.now().isoformat()}]
+                metadatas=[{"status": "skipped", "updated_at": datetime.now().isoformat()}]
             )
             logger.info(f"拒绝字段成功：{field_id}")
             return True
@@ -340,19 +346,19 @@ class ChromaStore:
             搜索结果列表，每项包含 metadata 和 distance
         """
         try:
-            where_filter: Dict[str, Any] = {}
+            where_conditions: List[Dict[str, Any]] = []
             if db_name:
-                where_filter["db_name"] = db_name
+                where_conditions.append({"db_name": db_name})
             if table_name:
-                where_filter["table_name"] = table_name
+                where_conditions.append({"table_name": table_name})
 
             kwargs: Dict[str, Any] = {
                 "query_texts": [query],
                 "n_results": top_k,
                 "include": ["metadatas", "distances"],
             }
-            if where_filter:
-                kwargs["where"] = where_filter
+            if where_conditions:
+                kwargs["where"] = {"$and": where_conditions} if len(where_conditions) > 1 else where_conditions[0]
 
             results = self.collection.query(**kwargs)
             return self._parse_query_results(results)

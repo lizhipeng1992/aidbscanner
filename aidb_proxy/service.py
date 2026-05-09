@@ -48,6 +48,76 @@ def _kill_process(pid: int, sig: int = signal.SIGTERM) -> None:
             pass
 
 
+def _find_pid_by_port(port: int) -> Optional[int]:
+    """跨平台查找监听指定端口的进程 PID"""
+    if sys.platform == "win32":
+        return _find_pid_by_port_windows(port)
+    elif sys.platform == "darwin":
+        return _find_pid_by_port_macos(port)
+    else:
+        return _find_pid_by_port_linux(port)
+
+
+def _find_pid_by_port_windows(port: int) -> Optional[int]:
+    """Windows: 通过 netstat 查找监听端口的 PID"""
+    try:
+        result = subprocess.run(
+            ["netstat", "-ano"],
+            capture_output=True, text=True, timeout=5
+        )
+        for line in result.stdout.splitlines():
+            parts = line.split()
+            if len(parts) >= 5:
+                local_addr = parts[1]
+                state = parts[3]
+                pid_str = parts[4]
+                if f":{port}" in local_addr and state == "LISTENING":
+                    try:
+                        return int(pid_str)
+                    except ValueError:
+                        continue
+    except (subprocess.TimeoutExpired, OSError):
+        pass
+    return None
+
+
+def _find_pid_by_port_linux(port: int) -> Optional[int]:
+    """Linux: 通过 ss 查找监听端口的 PID"""
+    for cmd in [["ss", "-tlnp"], ["netstat", "-tlnp"]]:
+        try:
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=5
+            )
+            for line in result.stdout.splitlines():
+                if f":{port}" in line:
+                    import re
+                    match = re.search(r'pid=(\d+)', line)
+                    if match:
+                        return int(match.group(1))
+        except (subprocess.TimeoutExpired, OSError):
+            continue
+    return None
+
+
+def _find_pid_by_port_macos(port: int) -> Optional[int]:
+    """macOS: 通过 lsof 查找监听端口的 PID"""
+    try:
+        result = subprocess.run(
+            ["lsof", "-i", f":{port}", "-n", "-P"],
+            capture_output=True, text=True, timeout=5
+        )
+        for line in result.stdout.splitlines()[1:]:
+            parts = line.split()
+            if len(parts) >= 2:
+                try:
+                    return int(parts[1])
+                except ValueError:
+                    continue
+    except (subprocess.TimeoutExpired, OSError):
+        pass
+    return None
+
+
 def _read_pid(pid_file: Path) -> Optional[int]:
     """读取 PID 文件"""
     if pid_file.exists():
@@ -113,6 +183,7 @@ def start_service(
     # 启动后端进程
     backend_proc = subprocess.Popen(
         backend_cmd,
+        stdin=subprocess.DEVNULL,
         stdout=open(LOG_FILE, "a"),
         stderr=subprocess.STDOUT,
         creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == "win32" else 0,
@@ -127,6 +198,7 @@ def start_service(
         try:
             frontend_proc = subprocess.Popen(
                 frontend_cmd,
+                stdin=subprocess.DEVNULL,
                 stdout=open(LOG_FILE, "a"),
                 stderr=subprocess.STDOUT,
                 cwd=str(web_dir),
@@ -145,33 +217,54 @@ def stop_service() -> Tuple[bool, Optional[bool]]:
     """
     停止服务（后端 + 前端）
 
+    优先使用 PID 文件，若 PID 文件缺失或已失效则通过端口查找并杀死进程。
+
     Returns:
         (backend_stopped, frontend_stopped) 停止结果元组
         - backend_stopped: 后端是否成功停止（False 表示未运行）
         - frontend_stopped: 前端是否成功停止（None 表示未启动，False 表示未运行，True 表示已停止）
     """
-    backend_stopped = False
-    frontend_stopped = None
-
     # 停止后端
     backend_pid = _read_pid(BACKEND_PID_FILE)
+    backend_killed = False
+
     if backend_pid:
         if _is_process_running(backend_pid):
             _kill_process(backend_pid)
             _wait_for_process(backend_pid)
-            backend_stopped = True
+            backend_killed = True
         _remove_pid(BACKEND_PID_FILE)
+
+    # PID 文件未提供有效 PID 或 PID 已失效 → 通过端口杀死
+    if not backend_killed:
+        found_pid = _find_pid_by_port(settings.api_port)
+        if found_pid:
+            _kill_process(found_pid)
+            _wait_for_process(found_pid)
+            backend_killed = True
+
+    backend_stopped = backend_pid is not None or backend_killed
 
     # 停止前端
     frontend_pid = _read_pid(FRONTEND_PID_FILE)
+    frontend_killed = False
+
     if frontend_pid:
         if _is_process_running(frontend_pid):
             _kill_process(frontend_pid)
             _wait_for_process(frontend_pid)
-            frontend_stopped = True
+            frontend_killed = True
         _remove_pid(FRONTEND_PID_FILE)
-    else:
-        frontend_stopped = None
+
+    # PID 文件未提供有效 PID 或 PID 已失效 → 通过端口杀死
+    if not frontend_killed:
+        found_pid = _find_pid_by_port(5173)
+        if found_pid:
+            _kill_process(found_pid)
+            _wait_for_process(found_pid)
+            frontend_killed = True
+
+    frontend_stopped = True if frontend_killed else (None if frontend_pid is None else False)
 
     return backend_stopped, frontend_stopped
 

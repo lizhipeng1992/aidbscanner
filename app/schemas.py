@@ -200,3 +200,51 @@ class QueryResponse(BaseModel):
     relevant_tables: List[QueryTableResult] = []
     has_error: bool = False
     error_message: Optional[str] = None
+
+
+# ==================== 语义缓存相关模型 ====================
+
+class TableSemanticCacheResponse(BaseModel):
+    """表语义缓存响应"""
+    id: str
+    db_name: str
+    table_name: str
+    chinese_name: Optional[str] = None
+    business_definition: Optional[str] = None
+    data_category: DataCategory = DataCategory.FACT
+    has_semantics: bool = False
+    fields: Optional[List[Dict[str, Any]]] = None
+
+
+class FieldSemanticCacheResponse(BaseModel):
+    """字段语义缓存响应"""
+    id: str
+    db_name: str
+    table_name: str
+    column_name: str
+    data_type: str
+    chinese_name: Optional[str] = None
+    business_definition: Optional[str] = None
+    value_rules: Optional[str] = None
+    related_fields: List[str] = []
+    data_category: DataCategory = DataCategory.OTHER
+    status: Optional[ColumnType] = None
+    has_semantics: bool = False
+
+
+class UpdateTableSemanticRequest(BaseModel):
+    """更新表语义请求"""
+    db_name: str
+    table_name: str
+    chinese_name: Optional[str] = None
+    business_definition: Optional[str] = None
+    data_category: Optional[DataCategory] = None
+
+
+class UpdateFieldSemanticRequest(BaseModel):
+    """更新字段语义请求"""
+    field_id: str
+    chinese_name: Optional[str] = None
+    business_definition: Optional[str] = None
+    value_rules: Optional[str] = None
+    data_category: Optional[DataCategory] = None

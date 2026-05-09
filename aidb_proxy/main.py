@@ -35,6 +35,8 @@ from aidb_proxy.schemas import (
     QueryResponse,
     QueryFieldResult,
     QueryTableResult,
+    FieldSemanticCacheResponse,
+    TableSemanticCacheResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -564,3 +566,127 @@ async def natural_language_query(request: QueryRequest):
     except Exception as e:
         logger.error(f"自然语言查询失败：{e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== 语义缓存相关 API ====================
+
+
+def _get_empty_field_cache(db_name: str, table_name: str, column_name: str, data_type: str = "") -> FieldSemanticCacheResponse:
+    """返回空的字段语义缓存响应"""
+    return FieldSemanticCacheResponse(
+        id=f"{db_name}.{table_name}.{column_name}",
+        db_name=db_name,
+        table_name=table_name,
+        column_name=column_name,
+        data_type=data_type,
+        has_semantics=False,
+    )
+
+
+def _get_empty_table_cache(db_name: str, table_name: str) -> TableSemanticCacheResponse:
+    """返回空的表语义缓存响应"""
+    return TableSemanticCacheResponse(
+        id=f"{db_name}.{table_name}",
+        db_name=db_name,
+        table_name=table_name,
+        has_semantics=False,
+    )
+
+
+@app.get("/databases/{db_name}/tables/{table_name}/semantic", response_model=TableSemanticCacheResponse)
+async def get_table_semantic_cache(db_name: str, table_name: str):
+    """获取表级语义信息（从 ChromaDB）"""
+    try:
+        result = chroma_store.get_table_semantic(db_name, table_name)
+
+        if not result:
+            return _get_empty_table_cache(db_name, table_name)
+
+        fields = []
+        for f in result.get("fields", []):
+            fields.append(
+                FieldSemanticCacheResponse(
+                    id=f"{db_name}.{table_name}.{f.get('column_name', '')}",
+                    db_name=db_name,
+                    table_name=table_name,
+                    column_name=f.get("column_name", ""),
+                    data_type=f.get("data_type", ""),
+                    chinese_name=f.get("chinese_name"),
+                    business_definition=f.get("business_definition"),
+                    value_rules=f.get("value_rules"),
+                    related_fields=f.get("related_fields", []),
+                    data_category=DataCategory(f.get("data_category", "other")) if f.get("data_category") else None,
+                    status=ColumnType(f.get("status")) if f.get("status") else None,
+                    has_semantics=True,
+                )
+            )
+
+        return TableSemanticCacheResponse(
+            id=f"{db_name}.{table_name}",
+            db_name=db_name,
+            table_name=table_name,
+            chinese_name=result.get("chinese_name"),
+            business_definition=result.get("business_definition"),
+            data_category=DataCategory(result.get("data_category", "fact")) if result.get("data_category") else None,
+            has_semantics=True,
+            fields=fields if fields else None,
+        )
+    except Exception as e:
+        logger.error(f"获取表语义缓存失败：{e}")
+        return _get_empty_table_cache(db_name, table_name)
+
+
+@app.get("/databases/{db_name}/tables/{table_name}/field/{column_name}/semantic", response_model=FieldSemanticCacheResponse)
+async def get_field_semantic_cache(db_name: str, table_name: str, column_name: str):
+    """获取字段级语义信息（从 ChromaDB）"""
+    try:
+        result = chroma_store.get_table_semantic(db_name, table_name)
+
+        if not result:
+            # 需要先获取字段的数据类型
+            scanner = get_scanner()
+            tables = scanner.scan_database(db_name)
+            data_type = ""
+            for table in tables:
+                if table.table_name == table_name:
+                    for col in table.columns:
+                        if col.column_name == column_name:
+                            data_type = col.data_type
+                            break
+                    if data_type:
+                        break
+            return _get_empty_field_cache(db_name, table_name, column_name, data_type)
+
+        for f in result.get("fields", []):
+            if f.get("column_name") == column_name:
+                return FieldSemanticCacheResponse(
+                    id=f"{db_name}.{table_name}.{column_name}",
+                    db_name=db_name,
+                    table_name=table_name,
+                    column_name=column_name,
+                    data_type=f.get("data_type", ""),
+                    chinese_name=f.get("chinese_name"),
+                    business_definition=f.get("business_definition"),
+                    value_rules=f.get("value_rules"),
+                    related_fields=f.get("related_fields", []),
+                    data_category=DataCategory(f.get("data_category", "other")) if f.get("data_category") else None,
+                    status=ColumnType(f.get("status")) if f.get("status") else None,
+                    has_semantics=True,
+                )
+
+        # 字段不在语义缓存中
+        scanner = get_scanner()
+        tables = scanner.scan_database(db_name)
+        data_type = ""
+        for table in tables:
+            if table.table_name == table_name:
+                for col in table.columns:
+                    if col.column_name == column_name:
+                        data_type = col.data_type
+                        break
+                if data_type:
+                    break
+        return _get_empty_field_cache(db_name, table_name, column_name, data_type)
+    except Exception as e:
+        logger.error(f"获取字段语义缓存失败：{e}")
+        return _get_empty_field_cache(db_name, table_name, column_name)

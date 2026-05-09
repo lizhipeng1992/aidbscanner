@@ -33,7 +33,20 @@
       "Bash(findstr 36840)",
       "Bash(findstr 48960)",
       "Bash(aidb-proxy stop *)",
-      "Bash(xxd)"
+      "Bash(xxd)",
+      "Bash(taskkill //PID 22644 //F)",
+      "Bash(netstat -ano)",
+      "Bash(findstr :8000)",
+      "Bash(findstr LISTENING)",
+      "Bash(uvicorn app:app --host 127.0.0.1 --port 8000)",
+      "Bash(pkill -9 -f uvicorn)",
+      "Bash(taskkill //PID 22144 //F)",
+      "Bash(true sleep *)",
+      "Bash(tasklist /FI \"PID eq $\\(cat ~/.aidb-proxy-backend.pid 2>/dev/null\\)\")",
+      "Bash(findstr \":8000\")",
+      "Bash(findstr \":5173\")",
+      "Bash(tasklist *)",
+      "Bash(echo \"exit: $?\")"
     ]
   }
 }

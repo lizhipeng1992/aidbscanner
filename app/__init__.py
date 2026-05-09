@@ -37,6 +37,11 @@ from app.schemas import (
     QueryResponse,
     QueryFieldResult,
     QueryTableResult,
+    # 语义缓存相关
+    TableSemanticCacheResponse,
+    FieldSemanticCacheResponse,
+    UpdateTableSemanticRequest,
+    UpdateFieldSemanticRequest,
 )
 
 logger = logging.getLogger(__name__)
@@ -607,4 +612,339 @@ async def natural_language_query(request: QueryRequest):
         )
     except Exception as e:
         logger.error(f"自然语言查询失败：{e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== 语义缓存相关 API ====================
+
+
+def _get_empty_field_cache(db_name: str, table_name: str, column_name: str, data_type: str = "") -> FieldSemanticCacheResponse:
+    """返回空的字段语义缓存响应"""
+    return FieldSemanticCacheResponse(
+        id=f"{db_name}.{table_name}.{column_name}",
+        db_name=db_name,
+        table_name=table_name,
+        column_name=column_name,
+        data_type=data_type,
+        has_semantics=False,
+    )
+
+
+def _get_empty_table_cache(db_name: str, table_name: str) -> TableSemanticCacheResponse:
+    """返回空的表语义缓存响应"""
+    return TableSemanticCacheResponse(
+        id=f"{db_name}.{table_name}",
+        db_name=db_name,
+        table_name=table_name,
+        has_semantics=False,
+    )
+
+
+@app.get("/databases/{db_name}/tables/{table_name}/semantic", response_model=TableSemanticCacheResponse)
+async def get_table_semantic_cache(db_name: str, table_name: str):
+    """获取表级语义信息（从 ChromaDB 或 Milvus）"""
+    try:
+        storage_type = settings.semantic_storage_type
+
+        if storage_type == "milvus":
+            from core.knowledge_base import KnowledgeBase
+
+            kb = KnowledgeBase()
+            kb.connect()
+
+            try:
+                # 查询表级语义
+                filter_expr = f'db_name == "{db_name}" and table_name == "{table_name}" and column_name == ""'
+                table_results = kb.vector_store.search(
+                    collection_name=settings.milvus_table_collection,
+                    query_vector=[0] * kb.embedding_service.dimension,
+                    top_k=1,
+                    filter_expr=filter_expr,
+                )
+
+                if not table_results:
+                    return _get_empty_table_cache(db_name, table_name)
+
+                table_data = table_results[0]
+
+                # 查询字段级语义
+                field_filter = f'db_name == "{db_name}" and table_name == "{table_name}"'
+                field_results = kb.get_fields_by_table(db_name, table_name)
+
+                fields = []
+                for f in field_results:
+                    fields.append({
+                        "id": f.get("id", f"{db_name}.{table_name}.{f.get('column_name', '')}"),
+                        "db_name": f.get("db_name", db_name),
+                        "table_name": f.get("table_name", table_name),
+                        "column_name": f.get("column_name", ""),
+                        "data_type": f.get("data_type", ""),
+                        "chinese_name": f.get("chinese_name"),
+                        "business_definition": f.get("business_definition"),
+                        "value_rules": f.get("value_rules"),
+                        "related_fields": [],
+                        "data_category": f.get("data_category", "other"),
+                        "status": None,
+                        "has_semantics": True,
+                    })
+
+                return TableSemanticCacheResponse(
+                    id=table_data.get("id", f"{db_name}.{table_name}"),
+                    db_name=table_data.get("db_name", db_name),
+                    table_name=table_data.get("table_name", table_name),
+                    chinese_name=table_data.get("chinese_name"),
+                    business_definition=table_data.get("business_definition"),
+                    data_category=DataCategory(table_data.get("data_category", "fact")),
+                    has_semantics=True,
+                    fields=fields if fields else None,
+                )
+            finally:
+                kb.disconnect()
+        else:
+            # ChromaDB
+            result = chroma_store.get_table_semantic(db_name, table_name)
+
+            if not result:
+                return _get_empty_table_cache(db_name, table_name)
+
+            fields = []
+            for f in result.get("fields", []):
+                fields.append({
+                    "id": f"{db_name}.{table_name}.{f.get('column_name', '')}",
+                    "db_name": db_name,
+                    "table_name": table_name,
+                    "column_name": f.get("column_name", ""),
+                    "data_type": f.get("data_type", ""),
+                    "chinese_name": f.get("chinese_name"),
+                    "business_definition": f.get("business_definition"),
+                    "value_rules": f.get("value_rules"),
+                    "related_fields": f.get("related_fields", []),
+                    "data_category": f.get("data_category", "other"),
+                    "status": f.get("status"),
+                    "has_semantics": True,
+                })
+
+            return TableSemanticCacheResponse(
+                id=f"{db_name}.{table_name}",
+                db_name=db_name,
+                table_name=table_name,
+                chinese_name=result.get("chinese_name"),
+                business_definition=result.get("business_definition"),
+                data_category=DataCategory(result.get("data_category", "fact")),
+                has_semantics=True,
+                fields=fields if fields else None,
+            )
+    except Exception as e:
+        logger.error(f"获取表语义缓存失败：{e}")
+        return _get_empty_table_cache(db_name, table_name)
+
+
+@app.get("/databases/{db_name}/tables/{table_name}/field/{column_name}/semantic", response_model=FieldSemanticCacheResponse)
+async def get_field_semantic_cache(db_name: str, table_name: str, column_name: str):
+    """获取字段级语义信息（从 ChromaDB 或 Milvus）"""
+    try:
+        storage_type = settings.semantic_storage_type
+
+        if storage_type == "milvus":
+            from core.knowledge_base import KnowledgeBase
+
+            kb = KnowledgeBase()
+            kb.connect()
+
+            try:
+                # 查询字段级语义
+                filter_expr = f'db_name == "{db_name}" and table_name == "{table_name}" and column_name == "{column_name}"'
+                results = kb.vector_store.search(
+                    collection_name=settings.milvus_field_collection,
+                    query_vector=[0] * kb.embedding_service.dimension,
+                    top_k=1,
+                    filter_expr=filter_expr,
+                )
+
+                if not results:
+                    return _get_empty_field_cache(db_name, table_name, column_name)
+
+                field_data = results[0]
+
+                return FieldSemanticCacheResponse(
+                    id=field_data.get("id", f"{db_name}.{table_name}.{column_name}"),
+                    db_name=field_data.get("db_name", db_name),
+                    table_name=field_data.get("table_name", table_name),
+                    column_name=field_data.get("column_name", column_name),
+                    data_type=field_data.get("data_type", ""),
+                    chinese_name=field_data.get("chinese_name"),
+                    business_definition=field_data.get("business_definition"),
+                    value_rules=field_data.get("value_rules"),
+                    related_fields=[],
+                    data_category=DataCategory(field_data.get("data_category", "other")),
+                    status=None,
+                    has_semantics=True,
+                )
+            finally:
+                kb.disconnect()
+        else:
+            # ChromaDB: 先获取整个表的语义，然后筛选指定字段
+            result = chroma_store.get_table_semantic(db_name, table_name)
+
+            if not result:
+                # 需要先获取字段的数据类型
+                scanner = get_scanner()
+                tables = scanner.scan_database(db_name)
+                data_type = ""
+                for table in tables:
+                    if table.table_name == table_name:
+                        for col in table.columns:
+                            if col.column_name == column_name:
+                                data_type = col.data_type
+                                break
+                        break
+                return _get_empty_field_cache(db_name, table_name, column_name, data_type)
+
+            # 查找指定字段
+            for field in result.get("fields", []):
+                if field.get("column_name") == column_name:
+                    status_val = field.get("status")
+                    return FieldSemanticCacheResponse(
+                        id=f"{db_name}.{table_name}.{column_name}",
+                        db_name=db_name,
+                        table_name=table_name,
+                        column_name=field.get("column_name", column_name),
+                        data_type=field.get("data_type", ""),
+                        chinese_name=field.get("chinese_name"),
+                        business_definition=field.get("business_definition"),
+                        value_rules=field.get("value_rules"),
+                        related_fields=field.get("related_fields", []),
+                        data_category=DataCategory(field.get("data_category", "other")),
+                        status=ColumnType(status_val.lower()) if status_val else None,
+                        has_semantics=True,
+                    )
+
+            # 字段不存在
+            return _get_empty_field_cache(db_name, table_name, column_name)
+    except Exception as e:
+        logger.error(f"获取字段语义缓存失败：{e}")
+        return _get_empty_field_cache(db_name, table_name, column_name)
+
+
+@app.put("/tables/semantic", response_model=TableSemanticResponse)
+async def update_table_semantic(request: UpdateTableSemanticRequest):
+    """更新表级语义信息"""
+    try:
+        storage_type = settings.semantic_storage_type
+
+        if storage_type == "milvus":
+            # Milvus 暂不支持直接更新，返回错误
+            logger.warning("Milvus 暂不支持直接更新表语义")
+            raise HTTPException(status_code=501, detail="Milvus 暂不支持直接更新表语义")
+        else:
+            # ChromaDB: 更新表中所有字段的表级元数据
+            result = chroma_store.get_table_semantic(request.db_name, request.table_name)
+
+            if not result:
+                raise HTTPException(status_code=404, detail=f"表不存在：{request.db_name}.{request.table_name}")
+
+            # 构建更新内容
+            updates: Dict[str, Any] = {}
+            if request.chinese_name is not None:
+                updates["table_chinese_name"] = request.chinese_name
+            if request.business_definition is not None:
+                updates["table_business_definition"] = request.business_definition
+            if request.data_category is not None:
+                updates["table_data_category"] = request.data_category.value
+
+            # 获取所有字段 ID 并更新
+            ids = [f"{request.db_name}.{request.table_name}.{f['column_name']}" for f in result.get("fields", [])]
+
+            if ids and updates:
+                chroma_store.collection.update(ids=ids, metadatas=[updates] * len(ids))
+
+            # 返回更新后的结果
+            updated_result = chroma_store.get_table_semantic(request.db_name, request.table_name)
+
+            return TableSemanticResponse(
+                table_name=updated_result["table_name"],
+                db_name=updated_result["db_name"],
+                chinese_name=updated_result.get("chinese_name"),
+                business_definition=updated_result.get("business_definition"),
+                data_category=DataCategory(updated_result.get("data_category", "fact")),
+                fields=[
+                    FieldSemanticResponse(
+                        id=f"{request.db_name}.{request.table_name}.{f['column_name']}",
+                        db_name=request.db_name,
+                        table_name=request.table_name,
+                        column_name=f["column_name"],
+                        data_type=f["data_type"],
+                        chinese_name=f.get("chinese_name"),
+                        business_definition=f.get("business_definition"),
+                        value_rules=f.get("value_rules"),
+                        related_fields=f.get("related_fields", []),
+                        data_category=DataCategory(f.get("data_category", "other")),
+                        status=ColumnType(f.get("status", "AUTO")),
+                    )
+                    for f in updated_result.get("fields", [])
+                ],
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"更新表语义失败：{e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/fields/semantic", response_model=FieldSemanticResponse)
+async def update_field_semantic(request: UpdateFieldSemanticRequest):
+    """更新字段级语义信息"""
+    try:
+        storage_type = settings.semantic_storage_type
+
+        if storage_type == "milvus":
+            # Milvus 暂不支持直接更新，返回错误
+            logger.warning("Milvus 暂不支持直接更新字段语义")
+            raise HTTPException(status_code=501, detail="Milvus 暂不支持直接更新字段语义")
+        else:
+            # ChromaDB: 更新字段元数据
+            updates: Dict[str, Any] = {}
+            if request.chinese_name is not None:
+                updates["chinese_name"] = request.chinese_name
+            if request.business_definition is not None:
+                updates["business_definition"] = request.business_definition
+            if request.value_rules is not None:
+                updates["value_rules"] = request.value_rules
+            if request.data_category is not None:
+                updates["data_category"] = request.data_category.value
+
+            if updates:
+                chroma_store.collection.update(ids=[request.field_id], metadatas=[updates])
+
+            # 返回更新后的结果
+            parts = request.field_id.split(".")
+            if len(parts) >= 3:
+                db_name = parts[0]
+                table_name = parts[1]
+                column_name = ".".join(parts[2:])
+
+                result = chroma_store.get_table_semantic(db_name, table_name)
+
+                if result:
+                    for field in result.get("fields", []):
+                        if field.get("column_name") == column_name:
+                            return FieldSemanticResponse(
+                                id=request.field_id,
+                                db_name=db_name,
+                                table_name=table_name,
+                                column_name=column_name,
+                                data_type=field.get("data_type", ""),
+                                chinese_name=field.get("chinese_name"),
+                                business_definition=field.get("business_definition"),
+                                value_rules=field.get("value_rules"),
+                                related_fields=field.get("related_fields", []),
+                                data_category=DataCategory(field.get("data_category", "other")),
+                                status=ColumnType(field.get("status", "AUTO")),
+                            )
+
+            raise HTTPException(status_code=404, detail=f"字段不存在：{request.field_id}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"更新字段语义失败：{e}")
         raise HTTPException(status_code=500, detail=str(e))

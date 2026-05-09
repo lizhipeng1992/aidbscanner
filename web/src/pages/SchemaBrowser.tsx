@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Tree,
   Card,
@@ -69,6 +69,10 @@ export default function SchemaBrowser() {
   const [fieldCache, setFieldCache] = useState<FieldSemanticCacheResponse | null>(null);
   const [tableFieldCache, setTableFieldCache] = useState<Map<string, FieldSemanticCacheResponse>>(new Map());
   const [tableSemantic, setTableSemantic] = useState<TableSemanticResponse | null>(null);
+  const treeDataRef = useRef<TreeNode[]>([]);
+  useEffect(() => {
+    treeDataRef.current = treeData;
+  }, [treeData]);
   const [isTableEditing, setIsTableEditing] = useState(false);
   const [tableEditForm, setTableEditForm] = useState<{
     chinese_name: string;
@@ -97,9 +101,27 @@ export default function SchemaBrowser() {
   useEffect(() => {
     if (selectedDb) {
       setCurrentPage(1);
+      setSelectedTable("");
+      setSelectedColumn("");
+      setTableSemantic(null);
+      setTableFieldCache(new Map());
+      setColumns([]);
       loadTables();
     }
   }, [selectedDb]);
+
+  // Auto-scroll Tree to the page containing the selected table
+  useEffect(() => {
+    if (selectedTable && treeData.length > 0) {
+      const idx = treeData.findIndex((t) => t.key === `table-${selectedTable}`);
+      if (idx >= 0) {
+        const targetPage = Math.floor(idx / pageSize) + 1;
+        if (targetPage !== currentPage) {
+          setCurrentPage(targetPage);
+        }
+      }
+    }
+  }, [selectedTable, treeData]);
 
   const fetchDatabases = async () => {
     try {
@@ -161,18 +183,9 @@ export default function SchemaBrowser() {
     }
   };
 
-  // Compute effective page during render so the Tree always shows the correct page
-  let effectivePage = currentPage;
-  if (selectedTable && treeData.length > 0) {
-    const idx = treeData.findIndex((t) => t.key === `table-${selectedTable}`);
-    if (idx >= 0) {
-      const targetPage = Math.floor(idx / pageSize) + 1;
-      if (targetPage !== currentPage) {
-        effectivePage = targetPage;
-        setCurrentPage(targetPage);
-      }
-    }
-  }
+  // During render, just use current state without calling setState.
+  // The useEffect above syncs currentPage when selectedTable changes.
+  const effectivePage = currentPage;
 
   const paginatedTreeData = treeData.slice(
     (effectivePage - 1) * pageSize,
@@ -247,6 +260,8 @@ export default function SchemaBrowser() {
         }
       }
     } else if (node.table_name) {
+      // Clear stale table semantic data immediately
+      setTableSemantic(null);
       // Calculate which page this table is on and jump there first,
       // so the Tree renders the correct page before selection is applied
       const tableIdx = treeData.findIndex((t) => t.key === `table-${node.table_name}`);
@@ -353,7 +368,7 @@ export default function SchemaBrowser() {
       await loadTables();
       // Re-select the table to refresh the detail view
       setSelectedColumn("");
-      const node = treeData.find((t) => t.key === `table-${selectedTable}`);
+      const node = treeDataRef.current.find((t) => t.key === `table-${selectedTable}`);
       if (node) {
         await handleSelect([`table-${selectedTable}`], { node });
       }

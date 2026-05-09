@@ -17,6 +17,7 @@ def cli():
 @click.option('--no-web', is_flag=True, help='仅启动后端，不启动前端')
 def start(host, port, web_port, no_web):
     """启动 API 服务 (后端 + 前端)"""
+    import os
     try:
         backend_pid, frontend_pid = start_service(
             host=host,
@@ -34,6 +35,8 @@ def start(host, port, web_port, no_web):
     except RuntimeError as e:
         click.echo(f"启动失败：{e}", err=True)
         raise SystemExit(1)
+    # 退出 CLI 进程，释放命令行
+    os._exit(0)
 
 
 @cli.command()
