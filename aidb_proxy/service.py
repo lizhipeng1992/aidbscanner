@@ -38,7 +38,10 @@ def _kill_process(pid: int, sig: int = signal.SIGTERM) -> None:
     """杀死进程（跨平台）"""
     if sys.platform == "win32":
         try:
-            subprocess.run(["taskkill", "/F", "/PID", str(pid)], capture_output=True)
+            subprocess.run(["taskkill", "/F", "/PID", str(pid)], capture_output=True, timeout=5)
+            time.sleep(0.5)
+            if _is_process_running(pid):
+                subprocess.run(["taskkill", "/F", "/PID", str(pid)], capture_output=True, timeout=5)
         except Exception:
             pass
     else:
@@ -65,17 +68,15 @@ def _find_pid_by_port_windows(port: int) -> Optional[int]:
             ["netstat", "-ano"],
             capture_output=True, text=True, timeout=5
         )
+        import re
         for line in result.stdout.splitlines():
-            parts = line.split()
-            if len(parts) >= 5:
-                local_addr = parts[1]
-                state = parts[3]
-                pid_str = parts[4]
-                if f":{port}" in local_addr and state == "LISTENING":
-                    try:
-                        return int(pid_str)
-                    except ValueError:
-                        continue
+            if f":{port}" not in line:
+                continue
+            if re.search(r'\bLISTENING\b', line):
+                parts = line.split()
+                for p in reversed(parts):
+                    if p.isdigit():
+                        return int(p)
     except (subprocess.TimeoutExpired, OSError):
         pass
     return None
@@ -257,12 +258,16 @@ def stop_service() -> Tuple[bool, Optional[bool]]:
         _remove_pid(FRONTEND_PID_FILE)
 
     # PID 文件未提供有效 PID 或 PID 已失效 → 通过端口杀死
-    if not frontend_killed:
-        found_pid = _find_pid_by_port(5173)
-        if found_pid:
-            _kill_process(found_pid)
-            _wait_for_process(found_pid)
-            frontend_killed = True
+    found_pid = _find_pid_by_port(5173)
+    if found_pid:
+        _kill_process(found_pid)
+        _wait_for_process(found_pid)
+        frontend_killed = True
+
+    # 二次检查：确保端口已释放
+    if _find_pid_by_port(5173):
+        _kill_process(_find_pid_by_port(5173))
+        _wait_for_process(_find_pid_by_port(5173))
 
     frontend_stopped = True if frontend_killed else (None if frontend_pid is None else False)
 

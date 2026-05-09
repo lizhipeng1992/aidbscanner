@@ -3,6 +3,9 @@ import logging
 from typing import List, Optional, Dict
 from contextlib import asynccontextmanager
 
+# Fix: set UTF-8 encoding for logging on Windows to prevent garbled Chinese characters
+logging.basicConfig(encoding="utf-8", level=logging.INFO)
+
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import JSONResponse
 
