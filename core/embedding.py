@@ -1,4 +1,4 @@
-"""文本嵌入服务，用于将文本转换为向量"""
+"""Text embedding service for converting text to vectors"""
 import logging
 from typing import List, Optional
 from abc import ABC, abstractmethod
@@ -7,55 +7,55 @@ logger = logging.getLogger(__name__)
 
 
 class BaseEmbeddingService(ABC):
-    """嵌入服务基类"""
+    """Base class for embedding services"""
 
     @abstractmethod
     def embed_text(self, text: str) -> List[float]:
-        """将单个文本转换为向量
+        """Convert a single text to a vector
 
         Args:
-            text: 输入文本
+            text: Input text
 
         Returns:
-            向量表示
+            Vector representation
         """
         pass
 
     @abstractmethod
     def embed_texts(self, texts: List[str]) -> List[List[float]]:
-        """批量将文本转换为向量
+        """Batch convert texts to vectors
 
         Args:
-            texts: 输入文本列表
+            texts: Input text list
 
         Returns:
-            向量列表
+            Vector list
         """
         pass
 
     @property
     @abstractmethod
     def dimension(self) -> int:
-        """返回向量维度"""
+        """Return vector dimension"""
         pass
 
 
 class OllamaEmbeddingService(BaseEmbeddingService):
-    """使用 Ollama 的嵌入服务"""
+    """Ollama-based embedding service"""
 
     def __init__(self, host: str, model: str = "nomic-embed-text"):
-        """初始化 Ollama 嵌入服务
+        """Initialize Ollama embedding service.
 
         Args:
-            host: Ollama 主机地址
-            model: 嵌入模型名称
+            host: Ollama host address
+            model: Embedding model name
         """
         self.host = host
         self.model = model
-        self._dimension = 768  # nomic-embed-text 默认维度
+        self._dimension = 768  # nomic-embed-text default dimension
 
     def embed_text(self, text: str) -> List[float]:
-        """将单个文本转换为向量"""
+        """Convert a single text to a vector"""
         try:
             import ollama
 
@@ -63,11 +63,11 @@ class OllamaEmbeddingService(BaseEmbeddingService):
             response = client.embeddings(model=self.model, prompt=text)
             return response["embedding"]
         except Exception as e:
-            logger.error(f"Ollama 嵌入失败：{e}")
+            logger.error(f"Ollama embedding failed: {e}")
             raise
 
     def embed_texts(self, texts: List[str]) -> List[List[float]]:
-        """批量将文本转换为向量"""
+        """Batch convert texts to vectors"""
         return [self.embed_text(text) for text in texts]
 
     @property
@@ -76,7 +76,7 @@ class OllamaEmbeddingService(BaseEmbeddingService):
 
 
 class OpenAIEmbeddingService(BaseEmbeddingService):
-    """使用 OpenAI 格式的嵌入服务"""
+    """OpenAI-compatible embedding service"""
 
     def __init__(
         self,
@@ -85,22 +85,22 @@ class OpenAIEmbeddingService(BaseEmbeddingService):
         model: str = "text-embedding-3-small",
         dimensions: Optional[int] = None,
     ):
-        """初始化 OpenAI 嵌入服务
+        """Initialize OpenAI embedding service.
 
         Args:
-            base_url: API 基础 URL
-            api_key: API 密钥
-            model: 嵌入模型名称
-            dimensions: 向量维度（可选）
+            base_url: API base URL
+            api_key: API key
+            model: Embedding model name
+            dimensions: Vector dimensions (optional)
         """
         self.base_url = base_url
         self.api_key = api_key
         self.model = model
-        self._dimensions = dimensions or 1536  # 默认维度
+        self._dimensions = dimensions or 1536  # default dimension
         self._client = None
 
     def _get_client(self):
-        """获取 OpenAI 客户端"""
+        """Get OpenAI client"""
         if self._client is None:
             from openai import OpenAI
 
@@ -108,7 +108,7 @@ class OpenAIEmbeddingService(BaseEmbeddingService):
         return self._client
 
     def embed_text(self, text: str) -> List[float]:
-        """将单个文本转换为向量"""
+        """Convert a single text to a vector"""
         try:
             client = self._get_client()
             kwargs = {"model": self.model, "input": text}
@@ -118,11 +118,11 @@ class OpenAIEmbeddingService(BaseEmbeddingService):
             response = client.embeddings.create(**kwargs)
             return response.data[0].embedding
         except Exception as e:
-            logger.error(f"OpenAI 嵌入失败：{e}")
+            logger.error(f"OpenAI embedding failed: {e}")
             raise
 
     def embed_texts(self, texts: List[str]) -> List[List[float]]:
-        """批量将文本转换为向量"""
+        """Batch convert texts to vectors"""
         try:
             client = self._get_client()
             kwargs = {"model": self.model, "input": texts}
@@ -132,8 +132,8 @@ class OpenAIEmbeddingService(BaseEmbeddingService):
             response = client.embeddings.create(**kwargs)
             return [item.embedding for item in response.data]
         except Exception as e:
-            logger.error(f"OpenAI 批量嵌入失败：{e}")
-            # 回退到逐个嵌入
+            logger.error(f"OpenAI batch embedding failed: {e}")
+            # Fallback to embedding one by one
             return [self.embed_text(text) for text in texts]
 
     @property

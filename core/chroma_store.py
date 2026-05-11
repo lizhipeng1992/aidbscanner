@@ -1,4 +1,4 @@
-"""ChromaDB 存储模块"""
+"""ChromaDB storage module"""
 import logging
 from datetime import datetime
 from typing import List, Optional, Dict, Any
@@ -12,13 +12,13 @@ logger = logging.getLogger(__name__)
 
 
 class ChromaStore:
-    """ChromaDB 存储，用于持久化语义分析结果"""
+    """ChromaDB storage for persisting semantic analysis results"""
 
     def __init__(self, path: str = "./data/chroma"):
-        """初始化 ChromaDB 存储
+        """Initialize ChromaDB storage
 
         Args:
-            path: ChromaDB 持久化存储路径
+            path: ChromaDB persistent storage path
         """
         self.path = path
         self.client = PersistentClient(path)
@@ -27,21 +27,21 @@ class ChromaStore:
             metadata={"description": "Database semantic metadata"},
             embedding_function=ONNXMiniLM_L6_V2(),
         )
-        logger.debug(f"ChromaDB 初始化完成，存储路径：{path}")
+        logger.debug(f"ChromaDB initialization complete, storage path: {path}")
 
     def store_table_semantic(self, table_semantic: TableSemantic) -> str:
-        """存储表语义信息
+        """Store table semantic information
 
         Args:
-            table_semantic: 表语义对象
+            table_semantic: Table semantic object
 
         Returns:
-            表名
+            Table name
         """
         db_name = table_semantic.db_name
         table_name = table_semantic.table_name
 
-        # 存储每个字段作为独立的文档
+        # Store each field as an independent document
         ids = []
         documents = []
         metadata_list = []
@@ -73,7 +73,7 @@ class ChromaStore:
                 meta["related_fields"] = field.related_fields
             metadata_list.append(meta)
 
-            # 构建嵌入文本（ChromaDB 会自动使用 ONNXMiniLM_L6_V2 生成向量）
+            # Build embedding text (ChromaDB will automatically use ONNXMiniLM_L6_V2 for vector generation)
             text_parts = [
                 f"字段：{field.column_name}",
                 f"表：{field.table_name}",
@@ -89,23 +89,23 @@ class ChromaStore:
                 text_parts.append(f"数据分类：{field.data_category.value}")
             documents.append(" ".join(text_parts))
 
-        # 批量添加到 ChromaDB（自动嵌入）
+        # Batch add to ChromaDB (automatic embedding)
         if ids:
             kwargs: Dict[str, Any] = {"ids": ids, "documents": documents, "metadatas": metadata_list}
             self.collection.upsert(**kwargs)
-            logger.info(f"存储表语义到 ChromaDB: {table_name} ({len(ids)} 个字段)")
+            logger.info(f"Stored table semantics to ChromaDB: {table_name} ({len(ids)} fields)")
 
         return table_name
 
     def get_table_semantic(self, db_name: str, table_name: str) -> Optional[Dict[str, Any]]:
-        """获取表语义信息
+        """Get table semantic information
 
         Args:
-            db_name: 数据库名
-            table_name: 表名
+            db_name: Database name
+            table_name: Table name
 
         Returns:
-            表语义数据，不存在则返回 None
+            Table semantic data, or None if not found
         """
         try:
             results = self.collection.get(
@@ -115,10 +115,10 @@ class ChromaStore:
             if not results.get("ids"):
                 return None
 
-            # ChromaDB 返回的是 metadatas (复数)
+            # ChromaDB returns metadatas (plural)
             metadata_list = results.get("metadatas", [])
 
-            # 构建表语义数据结构
+            # Build table semantic data structure
             fields = []
             for i, doc_id in enumerate(results.get("ids", [])):
                 meta = metadata_list[i] if i < len(metadata_list) else {}
@@ -137,7 +137,7 @@ class ChromaStore:
                     "updated_at": meta.get("updated_at"),
                 })
 
-            # 获取表级元数据（从第一个字段中提取）
+            # Get table-level metadata (extracted from first field)
             first_meta = metadata_list[0] if metadata_list else {}
 
             return {
@@ -150,21 +150,21 @@ class ChromaStore:
                 "updated_at": datetime.now().isoformat(),
             }
         except Exception as e:
-            logger.error(f"读取表语义失败：{e}")
+            logger.error(f"Failed to read table semantic: {e}")
             return None
 
     def get_index(self) -> List[Dict[str, Any]]:
-        """获取全局索引
+        """Get global index
 
         Returns:
-            索引条目列表（按表分组）
+            Index entry list (grouped by table)
         """
         try:
             results = self.collection.get(include=[])
             ids = results.get("ids", [])
             metadata_list = results.get("metadatas", [])
 
-            # 按表分组
+            # Group by table
             tables = {}
             for i, doc_id in enumerate(ids):
                 meta = metadata_list[i] if i < len(metadata_list) else {}
@@ -185,17 +185,17 @@ class ChromaStore:
 
             return list(tables.values())
         except Exception as e:
-            logger.error(f"获取索引失败：{e}")
+            logger.error(f"Failed to get index: {e}")
             return []
 
     def search_tables(self, keyword: str) -> List[Dict[str, Any]]:
-        """根据关键词搜索表
+        """Search tables by keyword
 
         Args:
-            keyword: 搜索关键词
+            keyword: Search keyword
 
         Returns:
-            匹配的表列表
+            Matching table list
         """
         entries = self.get_index()
         results = []
@@ -211,25 +211,25 @@ class ChromaStore:
         return results
 
     def list_tables_by_db(self, db_name: str) -> List[Dict[str, Any]]:
-        """列出指定数据库的所有表
+        """List all tables in a specified database
 
         Args:
-            db_name: 数据库名
+            db_name: Database name
 
         Returns:
-            表列表
+            Table list
         """
         entries = self.get_index()
         return [e for e in entries if e.get("db_name") == db_name]
 
     def get_pending_fields(self, db_name: str = None) -> List[Dict[str, Any]]:
-        """获取待审核字段列表
+        """Get pending field review list
 
         Args:
-            db_name: 可选的数据库名过滤
+            db_name: Optional database name filter
 
         Returns:
-            待审核字段列表
+            Pending field review list
         """
         try:
             where_conditions = [{"status": "pending"}]
@@ -259,22 +259,22 @@ class ChromaStore:
                 })
             return pending_fields
         except Exception as e:
-            logger.error(f"获取待审核字段失败：{e}")
+            logger.error(f"Failed to get pending fields: {e}")
             return []
 
     def submit_field(self, field_id: str, calibrated_by: str, modifications: Dict[str, Any] = None) -> bool:
-        """提交审核（确认字段）
+        """Submit review (confirm field)
 
         Args:
-            field_id: 字段唯一标识 (db_name.table_name.column_name)
-            calibrated_by: 审核人
-            modifications: 可选的修改内容
+            field_id: Field unique identifier (db_name.table_name.column_name)
+            calibrated_by: Reviewer
+            modifications: Optional modifications
 
         Returns:
-            是否成功
+            Whether successful
         """
         try:
-            # 构建更新内容
+            # Build update content
             updates = {
                 "status": "calibrated",
                 "calibrated_by": calibrated_by,
@@ -286,44 +286,44 @@ class ChromaStore:
                     if key in ["chinese_name", "business_definition", "value_rules", "data_category"]:
                         updates[key] = value
 
-            # 更新字段
+            # Update field
             self.collection.update(ids=[field_id], metadatas=[updates])
-            logger.info(f"提交审核成功：{field_id}")
+            logger.info(f"Review submission successful: {field_id}")
             return True
         except Exception as e:
-            logger.error(f"提交审核失败：{e}")
+            logger.error(f"Review submission failed: {e}")
             return False
 
     def reject_field(self, field_id: str) -> bool:
-        """拒绝字段
+        """Reject field
 
         Args:
-            field_id: 字段唯一标识 (db_name.table_name.column_name)
+            field_id: Field unique identifier (db_name.table_name.column_name)
 
         Returns:
-            是否成功
+            Whether successful
         """
         try:
             self.collection.update(
                 ids=[field_id],
                 metadatas=[{"status": "skipped", "updated_at": datetime.now().isoformat()}]
             )
-            logger.info(f"拒绝字段成功：{field_id}")
+            logger.info(f"Field rejected successfully: {field_id}")
             return True
         except Exception as e:
-            logger.error(f"拒绝字段失败：{e}")
+            logger.error(f"Failed to reject field: {e}")
             return False
 
     def modify_field(self, field_id: str, modifications: Dict[str, Any], calibrated_by: str) -> bool:
-        """修改字段并确认
+        """Modify field and confirm
 
         Args:
-            field_id: 字段唯一标识 (db_name.table_name.column_name)
-            modifications: 修改内容
-            calibrated_by: 修改人
+            field_id: Field unique identifier (db_name.table_name.column_name)
+            modifications: Modifications
+            calibrated_by: Modifier
 
         Returns:
-            是否成功
+            Whether successful
         """
         return self.submit_field(field_id, calibrated_by, modifications)
 
@@ -334,16 +334,16 @@ class ChromaStore:
         table_name: Optional[str] = None,
         top_k: int = 10,
     ) -> List[Dict[str, Any]]:
-        """基于向量相似度的字段搜索
+        """Field search based on vector similarity
 
         Args:
-            query: 查询文本
-            db_name: 数据库名过滤（可选）
-            table_name: 表名过滤（可选）
-            top_k: 返回结果数量
+            query: Query text
+            db_name: Database name filter (optional)
+            table_name: Table name filter (optional)
+            top_k: Number of results to return
 
         Returns:
-            搜索结果列表，每项包含 metadata 和 distance
+            Search results list, each containing metadata and distance
         """
         try:
             where_conditions: List[Dict[str, Any]] = []
@@ -364,7 +364,7 @@ class ChromaStore:
             return self._parse_query_results(results)
 
         except Exception as e:
-            logger.error(f"向量搜索字段失败：{e}")
+            logger.error(f"Vector search for fields failed: {e}")
             return []
 
     def search_tables_vector(
@@ -372,14 +372,14 @@ class ChromaStore:
         query: str,
         top_k: int = 10,
     ) -> List[Dict[str, Any]]:
-        """基于向量相似度的表搜索
+        """Table search based on vector similarity
 
         Args:
-            query: 查询文本
-            top_k: 返回结果数量
+            query: Query text
+            top_k: Number of results to return
 
         Returns:
-            搜索结果列表
+            Search results list
         """
         try:
             kwargs: Dict[str, Any] = {
@@ -391,7 +391,7 @@ class ChromaStore:
             results = self.collection.query(**kwargs)
             parsed = self._parse_query_results(results)
 
-            # 按表去重，保留表级信息
+            # Deduplicate by table, keeping table-level info
             seen = set()
             unique_results = []
             for item in parsed:
@@ -404,11 +404,11 @@ class ChromaStore:
             return unique_results
 
         except Exception as e:
-            logger.error(f"向量搜索表失败：{e}")
+            logger.error(f"Vector table search failed: {e}")
             return []
 
     def _parse_query_results(self, results: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """解析 ChromaDB 查询结果为统一格式"""
+        """Parse ChromaDB query results into unified format"""
         items = []
         metadatas = results.get("metadatas", [])
         distances = results.get("distances", [])
@@ -416,7 +416,7 @@ class ChromaStore:
         for i, meta_list in enumerate(metadatas):
             for j, meta in enumerate(meta_list):
                 distance = distances[i][j] if distances and i < len(distances) and j < len(distances[i]) else 0.0
-                # ChromaDB distance 越小越相似，转换为相似度分数
+                # ChromaDB distance: smaller means more similar, convert to similarity score
                 score = 1.0 - distance if distance < 1.0 else 0.0
                 items.append({
                     "metadata": meta,

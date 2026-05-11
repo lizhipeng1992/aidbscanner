@@ -1,4 +1,4 @@
-"""审核模式功能测试"""
+"""Review mode functionality tests"""
 import pytest
 from unittest.mock import Mock, patch, MagicMock
 from fastapi.testclient import TestClient
@@ -11,7 +11,7 @@ from core.chroma_store import ChromaStore
 
 @pytest.fixture
 def client():
-    """创建测试客户端"""
+    """Create test client"""
     return TestClient(app)
 
 
@@ -22,7 +22,7 @@ def mock_chroma_store():
         mock_instance = Mock()
         mock.return_value = mock_instance
 
-        # 设置默认返回值
+        # Set default return values
         mock_instance.get_pending_fields.return_value = [
             {
                 "field_id": "test_db.users.id",
@@ -45,11 +45,11 @@ def mock_chroma_store():
 
 
 class TestReviewPendingEndpoint:
-    """GET /review/pending 端点测试"""
+    """GET /review/pending endpoint tests"""
 
     @patch("app.chroma_store")
     def test_get_pending_success(self, mock_store, client):
-        """测试获取待审核字段成功"""
+        """Test getting pending fields success"""
         mock_store.get_pending_fields.return_value = [
             {
                 "field_id": "test_db.users.id",
@@ -76,7 +76,7 @@ class TestReviewPendingEndpoint:
 
     @patch("app.chroma_store")
     def test_get_pending_with_db_filter(self, mock_store, client):
-        """测试按数据库过滤待审核字段"""
+        """Test filtering pending fields by database"""
         mock_store.get_pending_fields.return_value = []
 
         response = client.get("/review/pending?db_name=test_db")
@@ -86,7 +86,7 @@ class TestReviewPendingEndpoint:
 
     @patch("app.chroma_store")
     def test_get_pending_empty(self, mock_store, client):
-        """测试无待审核字段"""
+        """Test no pending fields"""
         mock_store.get_pending_fields.return_value = []
 
         response = client.get("/review/pending")
@@ -98,11 +98,11 @@ class TestReviewPendingEndpoint:
 
 
 class TestReviewSubmitEndpoint:
-    """POST /review/submit 端点测试"""
+    """POST /review/submit endpoint tests"""
 
     @patch("app.chroma_store")
     def test_submit_success(self, mock_store, client):
-        """测试提交审核成功"""
+        """Test submitting review success"""
         mock_store.submit_field.return_value = True
 
         response = client.post("/review/submit", json={
@@ -118,7 +118,7 @@ class TestReviewSubmitEndpoint:
 
     @patch("app.chroma_store")
     def test_submit_with_modifications(self, mock_store, client):
-        """测试带修改提交审核"""
+        """Test submitting review with modifications"""
         mock_store.submit_field.return_value = True
 
         modifications = {
@@ -139,7 +139,7 @@ class TestReviewSubmitEndpoint:
 
     @patch("app.chroma_store")
     def test_submit_failed(self, mock_store, client):
-        """测试提交审核失败"""
+        """Test submitting review failure"""
         mock_store.submit_field.return_value = False
 
         response = client.post("/review/submit", json={
@@ -153,7 +153,7 @@ class TestReviewSubmitEndpoint:
         assert data["status"] == "pending"
 
     def test_submit_missing_field_id(self, client):
-        """测试缺少 field_id"""
+        """Test missing field_id"""
         response = client.post("/review/submit", json={
             "calibrated_by": "admin",
         })
@@ -162,11 +162,11 @@ class TestReviewSubmitEndpoint:
 
 
 class TestReviewRejectEndpoint:
-    """POST /review/reject 端点测试"""
+    """POST /review/reject endpoint tests"""
 
     @patch("app.chroma_store")
     def test_reject_success(self, mock_store, client):
-        """测试拒绝字段成功"""
+        """Test rejecting field success"""
         mock_store.reject_field.return_value = True
 
         response = client.post("/review/reject", json={
@@ -181,7 +181,7 @@ class TestReviewRejectEndpoint:
 
     @patch("app.chroma_store")
     def test_reject_with_reason(self, mock_store, client):
-        """测试带原因拒绝字段"""
+        """Test rejecting field with reason"""
         mock_store.reject_field.return_value = True
 
         response = client.post("/review/reject", json={
@@ -194,7 +194,7 @@ class TestReviewRejectEndpoint:
 
     @patch("app.chroma_store")
     def test_reject_failed(self, mock_store, client):
-        """测试拒绝字段失败"""
+        """Test rejecting field failure"""
         mock_store.reject_field.return_value = False
 
         response = client.post("/review/reject", json={
@@ -206,18 +206,18 @@ class TestReviewRejectEndpoint:
         assert data["success"] is False
 
     def test_reject_missing_field_id(self, client):
-        """测试缺少 field_id"""
+        """Test missing field_id"""
         response = client.post("/review/reject", json={})
 
         assert response.status_code == 422
 
 
 class TestReviewModifyEndpoint:
-    """POST /review/modify 端点测试"""
+    """POST /review/modify endpoint tests"""
 
     @patch("app.chroma_store")
     def test_modify_success(self, mock_store, client):
-        """测试修改并确认成功"""
+        """Test modifying and approving success"""
         mock_store.modify_field.return_value = True
 
         modifications = {
@@ -242,7 +242,7 @@ class TestReviewModifyEndpoint:
 
     @patch("app.chroma_store")
     def test_modify_failed(self, mock_store, client):
-        """测试修改并确认失败"""
+        """Test modifying and approving failure"""
         mock_store.modify_field.return_value = False
 
         response = client.post("/review/modify", json={
@@ -256,7 +256,7 @@ class TestReviewModifyEndpoint:
         assert data["success"] is False
 
     def test_modify_missing_modifications(self, client):
-        """测试缺少 modifications"""
+        """Test missing modifications"""
         response = client.post("/review/modify", json={
             "field_id": "test_db.users.id",
             "calibrated_by": "admin",
@@ -266,26 +266,26 @@ class TestReviewModifyEndpoint:
 
 
 class TestRuntimeModeConfig:
-    """运行模式配置测试"""
+    """Runtime mode config tests"""
 
     def test_runtime_mode_default(self):
-        """测试 runtime_mode 默认值"""
+        """Test runtime_mode default value"""
         from config.settings import settings
         assert settings.runtime_mode == "auto"
 
     def test_effective_runtime_mode_property(self):
-        """测试 effective_runtime_mode 属性"""
+        """Test effective_runtime_mode property"""
         from config.settings import settings
         assert settings.effective_runtime_mode == settings.runtime_mode
 
 
 class TestSemanticAnalyzerRuntimeMode:
-    """语义分析器运行模式测试"""
+    """Semantic analyzer runtime mode tests"""
 
     @patch("core.semantic_analyzer.settings")
     @patch("core.semantic_analyzer.ChromaStore")
     def test_auto_mode_status(self, mock_chroma_store, mock_settings):
-        """测试 auto 模式字段状态为 AUTO"""
+        """Test auto mode field status is AUTO"""
         from core.semantic_analyzer import SemanticAnalyzer
         from core.llm_client import BaseLLMClient, ChatResponse
         from core.models import ColumnMetadata
@@ -314,7 +314,7 @@ class TestSemanticAnalyzerRuntimeMode:
     @patch("core.semantic_analyzer.settings")
     @patch("core.semantic_analyzer.ChromaStore")
     def test_review_mode_status(self, mock_chroma_store, mock_settings):
-        """测试 review 模式字段状态为 PENDING"""
+        """Test review mode field status is PENDING"""
         from core.semantic_analyzer import SemanticAnalyzer
         from core.llm_client import BaseLLMClient, ChatResponse
         from core.models import ColumnMetadata

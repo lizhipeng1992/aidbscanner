@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-AI 数据库语义层扫描工具 (AI Database Semantic Layer Scanner) - A Python tool that uses local LLM (Ollama) to analyze MySQL database schemas and extract business semantics from table/column metadata.
+AI Database Semantic Layer Scanner - A Python tool that uses local LLM (Ollama) to analyze MySQL database schemas and extract business semantics from table/column metadata.
 
 ## Architecture
 
@@ -62,6 +62,17 @@ Copy `.env.example` to `.env` and configure:
 4. **Relationship Verification**: Two-stage process - first calculate match rate via SQL JOIN, then use LLM to verify semantic validity of the relationship.
 
 5. **RAG Context**: `RAGContext.to_prompt()` converts semantic metadata into LLM-readable format for downstream query tasks.
+
+## Logging Convention
+
+**ALL developer-facing output MUST be in English.** This includes:
+- `logger.debug/info/warning/error` messages in all files
+- HTTPException detail/message strings in app endpoints
+- Module docstrings, class docstrings, method docstrings
+- Inline comments
+- Field descriptions in Pydantic models
+
+**Exception:** LLM-facing prompts (system prompts, user prompts sent to Ollama/OpenAI) should remain in Chinese since the LLM is designed to respond in Chinese.
 
 ## Configuration
 

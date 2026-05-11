@@ -1,4 +1,4 @@
-"""数据模型单元测试"""
+"""Data model unit tests"""
 import pytest
 from datetime import datetime
 from uuid import UUID
@@ -16,10 +16,10 @@ from core.models import (
 
 
 class TestColumnMetadata:
-    """ColumnMetadata 测试"""
+    """ColumnMetadata tests"""
 
     def test_create_column_metadata(self):
-        """测试创建列元数据"""
+        """Test creating column metadata"""
         col = ColumnMetadata(
             column_name="user_id",
             table_name="users",
@@ -36,7 +36,7 @@ class TestColumnMetadata:
         assert col.is_nullable == "NO"
 
     def test_primary_key_property(self):
-        """测试主键属性判断"""
+        """Test primary key property judgment"""
         col = ColumnMetadata(
             column_name="id",
             table_name="users",
@@ -49,7 +49,7 @@ class TestColumnMetadata:
         assert col.is_primary_key is False
 
     def test_id_suffix_property(self):
-        """测试_id 后缀判断"""
+        """Test _id suffix judgment"""
         col1 = ColumnMetadata(
             column_name="user_id",
             table_name="orders",
@@ -73,10 +73,10 @@ class TestColumnMetadata:
 
 
 class TestTableMetadata:
-    """TableMetadata 测试"""
+    """TableMetadata tests"""
 
     def test_create_table_metadata(self):
-        """测试创建表元数据"""
+        """Test creating table metadata"""
         col = ColumnMetadata(
             column_name="id",
             table_name="users",
@@ -98,10 +98,10 @@ class TestTableMetadata:
 
 
 class TestFieldSemantic:
-    """FieldSemantic 测试"""
+    """FieldSemantic tests"""
 
     def test_create_field_semantic(self):
-        """测试创建字段语义"""
+        """Test creating field semantic"""
         fs = FieldSemantic(
             id="test_db.users.user_name",
             db_name="test_db",
@@ -121,7 +121,7 @@ class TestFieldSemantic:
         assert fs.status == ColumnType.CALIBRATED
 
     def test_default_values(self):
-        """测试默认值"""
+        """Test default values"""
         fs = FieldSemantic(
             id="test_db.users.test_col",
             db_name="test_db",
@@ -137,10 +137,10 @@ class TestFieldSemantic:
 
 
 class TestTableSemantic:
-    """TableSemantic 测试"""
+    """TableSemantic tests"""
 
     def test_create_table_semantic(self):
-        """测试创建表语义"""
+        """Test creating table semantic"""
         fs = FieldSemantic(
             id="test_db.users.id",
             db_name="test_db",
@@ -162,10 +162,10 @@ class TestTableSemantic:
 
 
 class TestRelationship:
-    """Relationship 测试"""
+    """Relationship tests"""
 
     def test_create_relationship(self):
-        """测试创建关系"""
+        """Test creating relationship"""
         rel = Relationship(
             source_table="orders",
             source_column="user_id",
@@ -182,10 +182,10 @@ class TestRelationship:
 
 
 class TestRAGContext:
-    """RAGContext 测试"""
+    """RAGContext tests"""
 
     def test_create_rag_context(self):
-        """测试创建 RAG 上下文"""
+        """Test creating RAG context"""
         fs = FieldSemantic(
             id="test_db.users.id",
             db_name="test_db",
@@ -212,7 +212,7 @@ class TestRAGContext:
         assert len(ctx.relevant_tables) == 1
 
     def test_to_prompt(self):
-        """测试转换为提示词"""
+        """Test conversion to prompt"""
         fs = FieldSemantic(
             id="test_db.users.id",
             db_name="test_db",
@@ -242,16 +242,16 @@ class TestRAGContext:
 
 
 class TestDataType:
-    """数据类型测试"""
+    """Data type tests"""
 
     def test_column_type_values(self):
-        """测试列类型枚举值"""
+        """Test column type enum values"""
         assert ColumnType.PENDING.value == "pending"
         assert ColumnType.CALIBRATED.value == "calibrated"
         assert ColumnType.SKIPPED.value == "skipped"
 
     def test_data_category_values(self):
-        """测试数据类别枚举值"""
+        """Test data category enum values"""
         assert DataCategory.DIMENSION.value == "dimension"
         assert DataCategory.METRIC.value == "metric"
         assert DataCategory.FACT.value == "fact"

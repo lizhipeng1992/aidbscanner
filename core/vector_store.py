@@ -1,4 +1,4 @@
-"""Milvus 向量数据库存储接口"""
+"""Milvus vector database storage interface"""
 import logging
 from typing import List, Optional, Dict, Any
 from abc import ABC, abstractmethod
@@ -9,36 +9,36 @@ logger = logging.getLogger(__name__)
 
 
 class BaseVectorStore(ABC):
-    """向量存储基类"""
+    """Base class for vector storage"""
 
     @abstractmethod
     def connect(self) -> None:
-        """连接到向量数据库"""
+        """Connect to vector database"""
         pass
 
     @abstractmethod
     def disconnect(self) -> None:
-        """断开连接"""
+        """Disconnect"""
         pass
 
     @abstractmethod
     def create_collection(self, collection_name: str, dimension: int) -> None:
-        """创建集合（表）"""
+        """Create collection (table)"""
         pass
 
     @abstractmethod
     def drop_collection(self, collection_name: str) -> None:
-        """删除集合"""
+        """Drop collection"""
         pass
 
     @abstractmethod
     def has_collection(self, collection_name: str) -> bool:
-        """检查集合是否存在"""
+        """Check if collection exists"""
         pass
 
     @abstractmethod
     def insert(self, collection_name: str, vectors: List[List[float]], data: List[Dict[str, Any]]) -> None:
-        """插入向量数据"""
+        """Insert vector data"""
         pass
 
     @abstractmethod
@@ -49,31 +49,31 @@ class BaseVectorStore(ABC):
         top_k: int = 10,
         filter_expr: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
-        """搜索相似向量"""
+        """Search for similar vectors"""
         pass
 
     @abstractmethod
     def get(self, collection_name: str, ids: List[str]) -> List[Dict[str, Any]]:
-        """根据 ID 获取数据"""
+        """Get data by ID"""
         pass
 
     @abstractmethod
     def delete(self, collection_name: str, filter_expr: str) -> None:
-        """删除数据"""
+        """Delete data"""
         pass
 
 
 class MilvusVectorStore(BaseVectorStore):
-    """Milvus 向量数据库实现"""
+    """Milvus vector database implementation"""
 
     def __init__(self, host: str, port: int, collection: Optional[str] = None, vector_dim: int = 1024):
-        """初始化 Milvus 向量存储
+        """Initialize Milvus vector storage
 
         Args:
-            host: Milvus 主机地址
-            port: Milvus 端口
-            collection: 集合名称
-            vector_dim: 向量维度
+            host: Milvus host address
+            port: Milvus port
+            collection: Collection name
+            vector_dim: Vector dimension
         """
         self.host = host
         self.port = port
@@ -83,33 +83,33 @@ class MilvusVectorStore(BaseVectorStore):
         self._connected = False
 
     def connect(self) -> None:
-        """连接到 Milvus"""
+        """Connect to Milvus"""
         if self._connected:
             return
 
         try:
             from pymilvus import connections, utility
 
-            # 连接 Milvus
+            # Connect to Milvus
             connections.connect(
                 alias="default",
                 host=self.host,
                 port=self.port,
             )
 
-            # 检查连接状态
+            # Check connection status
             if utility.has_connection("default"):
                 self._connected = True
-                logger.info(f"成功连接到 Milvus: {self.host}:{self.port}")
+                logger.info(f"Successfully connected to Milvus: {self.host}:{self.port}")
             else:
-                raise ConnectionError("无法连接到 Milvus")
+                raise ConnectionError("Cannot connect to Milvus")
 
         except Exception as e:
-            logger.error(f"连接 Milvus 失败：{e}")
+            logger.error(f"Failed to connect to Milvus: {e}")
             raise
 
     def disconnect(self) -> None:
-        """断开连接"""
+        """Disconnect"""
         if not self._connected:
             return
 
@@ -118,28 +118,28 @@ class MilvusVectorStore(BaseVectorStore):
 
             connections.disconnect("default")
             self._connected = False
-            logger.info("已断开 Milvus 连接")
+            logger.info("Milvus connection disconnected")
         except Exception as e:
-            logger.error(f"断开 Milvus 连接失败：{e}")
+            logger.error(f"Failed to disconnect from Milvus: {e}")
 
     def create_collection(self, collection_name: Optional[str] = None, dimension: Optional[int] = None) -> None:
-        """创建集合
+        """Create collection.
 
         Args:
-            collection_name: 集合名称，默认使用初始化时的名称
-            dimension: 向量维度，默认使用初始化时的维度
+            collection_name: Collection name, defaults to initialized name
+            dimension: Vector dimension, defaults to initialized dimension
         """
         from pymilvus import FieldSchema, CollectionSchema, DataType, Collection
 
         collection_name = collection_name or self.collection_name
         dimension = dimension or self.vector_dim
 
-        # 检查集合是否已存在
+        # Check if collection already exists
         if self.has_collection(collection_name):
-            logger.info(f"集合 {collection_name} 已存在，跳过创建")
+            logger.info(f"Collection {collection_name} already exists, skipping creation")
             return
 
-        # 定义字段
+        # Define fields
         fields = [
             FieldSchema(name="id", dtype=DataType.VARCHAR, max_length=256, is_primary=True),
             FieldSchema(name="vector", dtype=DataType.FLOAT_VECTOR, dim=dimension),
@@ -154,33 +154,33 @@ class MilvusVectorStore(BaseVectorStore):
             FieldSchema(name="created_at", dtype=DataType.VARCHAR, max_length=64),
         ]
 
-        schema = CollectionSchema(fields, "语义元数据集合")
+        schema = CollectionSchema(fields, "Semantic metadata collection")
 
-        # 创建集合
+        # Create collection
         collection = Collection(collection_name, schema)
-        logger.info(f"创建集合：{collection_name}")
+        logger.info(f"Created collection: {collection_name}")
 
-        # 为向量字段创建索引
+        # Create vector index
         index_params = {
             "metric_type": "COSINE",
             "index_type": "HNSW",
             "params": {"M": 8, "efConstruction": 200},
         }
         collection.create_index("vector", index_params)
-        logger.info(f"为集合 {collection_name} 创建向量索引")
+        logger.info(f"Created vector index for collection {collection_name}")
 
     def drop_collection(self, collection_name: Optional[str] = None) -> None:
-        """删除集合"""
+        """Drop collection"""
         from pymilvus import utility
 
         collection_name = collection_name or self.collection_name
 
         if self.has_collection(collection_name):
             utility.drop_collection(collection_name)
-            logger.info(f"删除集合：{collection_name}")
+            logger.info(f"Dropped collection: {collection_name}")
 
     def has_collection(self, collection_name: Optional[str] = None) -> bool:
-        """检查集合是否存在"""
+        """Check if collection exists"""
         from pymilvus import utility
 
         collection_name = collection_name or self.collection_name
@@ -192,19 +192,19 @@ class MilvusVectorStore(BaseVectorStore):
         vectors: Optional[List[List[float]]] = None,
         data: Optional[List[Dict[str, Any]]] = None,
     ) -> None:
-        """插入向量数据
+        """Insert vector data.
 
         Args:
-            collection_name: 集合名称
-            vectors: 向量列表
-            data: 数据列表，每个元素是包含字段值的字典
+            collection_name: Collection name
+            vectors: Vector list
+            data: Data list, each element is a dict of field values
         """
         from pymilvus import Collection
 
         collection_name = collection_name or self.collection_name
         collection = Collection(collection_name)
 
-        # 准备插入数据
+        # Prepare insertion data
         entities = []
         for field in collection.schema.fields:
             if field.name == "vector":
@@ -215,7 +215,7 @@ class MilvusVectorStore(BaseVectorStore):
 
         collection.insert(entities)
         collection.flush()
-        logger.info(f"插入 {len(vectors)} 条数据到集合 {collection_name}")
+        logger.info(f"Inserted {len(vectors)} records into collection {collection_name}")
 
     def search(
         self,
@@ -224,16 +224,16 @@ class MilvusVectorStore(BaseVectorStore):
         top_k: int = 10,
         filter_expr: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
-        """搜索相似向量
+        """Search for similar vectors.
 
         Args:
-            collection_name: 集合名称
-            query_vector: 查询向量
-            top_k: 返回结果数量
-            filter_expr: 过滤表达式
+            collection_name: Collection name
+            query_vector: Query vector
+            top_k: Number of results to return
+            filter_expr: Filter expression
 
         Returns:
-            搜索结果列表
+            Search results list
         """
         from pymilvus import Collection
 
@@ -264,7 +264,7 @@ class MilvusVectorStore(BaseVectorStore):
             ],
         )
 
-        # 解析搜索结果
+        # Parse search results
         search_results = []
         for result in results[0]:
             search_results.append(
@@ -285,14 +285,14 @@ class MilvusVectorStore(BaseVectorStore):
         return search_results
 
     def get(self, collection_name: Optional[str] = None, ids: Optional[List[str]] = None) -> List[Dict[str, Any]]:
-        """根据 ID 获取数据
+        """Get data by ID.
 
         Args:
-            collection_name: 集合名称
-            ids: ID 列表
+            collection_name: Collection name
+            ids: ID list
 
         Returns:
-            数据列表
+            Data list
         """
         from pymilvus import Collection
 
@@ -306,11 +306,11 @@ class MilvusVectorStore(BaseVectorStore):
         return results
 
     def delete(self, collection_name: Optional[str] = None, filter_expr: Optional[str] = None) -> None:
-        """删除数据
+        """Delete data.
 
         Args:
-            collection_name: 集合名称
-            filter_expr: 过滤表达式
+            collection_name: Collection name
+            filter_expr: Filter expression
         """
         from pymilvus import Collection
 
@@ -319,7 +319,7 @@ class MilvusVectorStore(BaseVectorStore):
 
         collection.delete(filter_expr)
         collection.flush()
-        logger.info(f"从集合 {collection_name} 删除数据：{filter_expr}")
+        logger.info(f"Deleted data from collection {collection_name}: {filter_expr}")
 
     def __enter__(self):
         self.connect()

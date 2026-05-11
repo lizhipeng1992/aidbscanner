@@ -1,4 +1,4 @@
-"""服务进程管理模块"""
+"""Service process management module"""
 import os
 import signal
 import subprocess
@@ -12,11 +12,11 @@ from config.settings import settings
 BACKEND_PID_FILE = Path.home() / ".aidb-proxy-backend.pid"
 FRONTEND_PID_FILE = Path.home() / ".aidb-proxy-frontend.pid"
 LOG_FILE = Path.home() / ".aidb-proxy.log"
-TIMEOUT = 10  # 停止超时时间
+TIMEOUT = 10  # Stop timeout (seconds)
 
 
 def _is_process_running(pid: int) -> bool:
-    """检查进程是否运行（跨平台）"""
+    """Check if process is running (cross-platform)"""
     if sys.platform == "win32":
         try:
             result = subprocess.run(
@@ -35,7 +35,7 @@ def _is_process_running(pid: int) -> bool:
 
 
 def _kill_process(pid: int, sig: int = signal.SIGTERM) -> None:
-    """杀死进程（跨平台）"""
+    """Kill process (cross-platform)"""
     if sys.platform == "win32":
         try:
             subprocess.run(["taskkill", "/F", "/PID", str(pid)], capture_output=True, timeout=5)
@@ -52,7 +52,7 @@ def _kill_process(pid: int, sig: int = signal.SIGTERM) -> None:
 
 
 def _find_pid_by_port(port: int) -> Optional[int]:
-    """跨平台查找监听指定端口的进程 PID"""
+    """Cross-platform: find PID of process listening on specified port"""
     if sys.platform == "win32":
         return _find_pid_by_port_windows(port)
     elif sys.platform == "darwin":
@@ -62,7 +62,7 @@ def _find_pid_by_port(port: int) -> Optional[int]:
 
 
 def _find_pid_by_port_windows(port: int) -> Optional[int]:
-    """Windows: 通过 netstat 查找监听端口的 PID"""
+    """Windows: Find PID of process listening on port via netstat"""
     try:
         result = subprocess.run(
             ["netstat", "-ano"],
@@ -83,7 +83,7 @@ def _find_pid_by_port_windows(port: int) -> Optional[int]:
 
 
 def _find_pid_by_port_linux(port: int) -> Optional[int]:
-    """Linux: 通过 ss 查找监听端口的 PID"""
+    """Linux: Find PID of process listening on port via ss"""
     for cmd in [["ss", "-tlnp"], ["netstat", "-tlnp"]]:
         try:
             result = subprocess.run(
@@ -101,7 +101,7 @@ def _find_pid_by_port_linux(port: int) -> Optional[int]:
 
 
 def _find_pid_by_port_macos(port: int) -> Optional[int]:
-    """macOS: 通过 lsof 查找监听端口的 PID"""
+    """macOS: Find PID of process listening on port via lsof"""
     try:
         result = subprocess.run(
             ["lsof", "-i", f":{port}", "-n", "-P"],
@@ -120,7 +120,7 @@ def _find_pid_by_port_macos(port: int) -> Optional[int]:
 
 
 def _read_pid(pid_file: Path) -> Optional[int]:
-    """读取 PID 文件"""
+    """Read PID file"""
     if pid_file.exists():
         try:
             return int(pid_file.read_text().strip())
@@ -130,24 +130,24 @@ def _read_pid(pid_file: Path) -> Optional[int]:
 
 
 def _write_pid(pid_file: Path, pid: int) -> None:
-    """写入 PID 文件"""
+    """Write PID file"""
     pid_file.write_text(str(pid))
 
 
 def _remove_pid(pid_file: Path) -> None:
-    """删除 PID 文件"""
+    """Remove PID file"""
     if pid_file.exists():
         pid_file.unlink()
 
 
 def _wait_for_process(pid: int) -> None:
-    """等待进程结束"""
+    """Wait for process to end"""
     for _ in range(TIMEOUT):
         if not _is_process_running(pid):
             break
         time.sleep(1)
 
-    # 超时则 SIGKILL
+    # SIGKILL on timeout
     if _is_process_running(pid):
         _kill_process(pid, signal.SIGKILL)
 
@@ -159,29 +159,29 @@ def start_service(
     start_web: bool = True
 ) -> Tuple[int, Optional[int]]:
     """
-    启动服务（后端 + 前端）
+    Start service (backend + frontend)
 
     Args:
-        host: 后端监听地址，None 则使用配置
-        port: 后端监听端口，None 则使用配置
-        web_port: 前端端口，None 则使用默认 5173
-        start_web: 是否启动前端开发服务器
+        host: Backend listen address, uses config if None
+        port: Backend listen port, uses config if None
+        web_port: Frontend port, defaults to 5173 if None
+        start_web: Whether to start frontend dev server
 
     Returns:
-        (backend_pid, frontend_pid) 进程 PID 元组，前端未启动时 frontend_pid 为 None
+        (backend_pid, frontend_pid) PID tuple, frontend_pid is None if frontend not started
     """
-    # 检查后端是否已运行
+    # Check if backend is already running
     backend_pid = _read_pid(BACKEND_PID_FILE)
     if backend_pid and _is_process_running(backend_pid):
-        raise RuntimeError(f"后端服务已在运行 (PID: {backend_pid})")
+        raise RuntimeError(f"Backend service already running (PID: {backend_pid})")
 
-    # 确保日志目录存在
+    # Ensure log directory exists
     LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
 
-    # 构建后端命令
+    # Build backend command
     backend_cmd = _get_uvicorn_command(host or settings.api_host, port or settings.api_port)
 
-    # 启动后端进程
+    # Start backend process
     backend_proc = subprocess.Popen(
         backend_cmd,
         stdin=subprocess.DEVNULL,
@@ -191,7 +191,7 @@ def start_service(
     )
     _write_pid(BACKEND_PID_FILE, backend_proc.pid)
 
-    # 启动前端进程（如果启用）
+    # Start frontend process (if enabled)
     frontend_pid = None
     if start_web:
         web_dir = Path(__file__).parent.parent / "web"
@@ -208,7 +208,7 @@ def start_service(
             _write_pid(FRONTEND_PID_FILE, frontend_proc.pid)
             frontend_pid = frontend_proc.pid
         except FileNotFoundError:
-            # npm 不可用时，只启动后端
+            # npm unavailable, start backend only
             pass
 
     return backend_proc.pid, frontend_pid
@@ -216,16 +216,16 @@ def start_service(
 
 def stop_service() -> Tuple[bool, Optional[bool]]:
     """
-    停止服务（后端 + 前端）
+    Stop service (backend + frontend)
 
-    优先使用 PID 文件，若 PID 文件缺失或已失效则通过端口查找并杀死进程。
+    Prefer PID files; if PID files are missing or stale, find and kill processes via port.
 
     Returns:
-        (backend_stopped, frontend_stopped) 停止结果元组
-        - backend_stopped: 后端是否成功停止（False 表示未运行）
-        - frontend_stopped: 前端是否成功停止（None 表示未启动，False 表示未运行，True 表示已停止）
+        (backend_stopped, frontend_stopped) stop result tuple
+        - backend_stopped: Whether backend was successfully stopped (False means not running)
+        - frontend_stopped: Whether frontend was successfully stopped (None means not started, False means not running, True means stopped)
     """
-    # 停止后端
+    # Stop backend
     backend_pid = _read_pid(BACKEND_PID_FILE)
     backend_killed = False
 
@@ -236,7 +236,7 @@ def stop_service() -> Tuple[bool, Optional[bool]]:
             backend_killed = True
         _remove_pid(BACKEND_PID_FILE)
 
-    # PID 文件未提供有效 PID 或 PID 已失效 → 通过端口杀死
+    # PID file did not provide valid PID or PID is stale → kill via port
     if not backend_killed:
         found_pid = _find_pid_by_port(settings.api_port)
         if found_pid:
@@ -246,7 +246,7 @@ def stop_service() -> Tuple[bool, Optional[bool]]:
 
     backend_stopped = backend_pid is not None or backend_killed
 
-    # 停止前端
+    # Stop frontend
     frontend_pid = _read_pid(FRONTEND_PID_FILE)
     frontend_killed = False
 
@@ -257,14 +257,14 @@ def stop_service() -> Tuple[bool, Optional[bool]]:
             frontend_killed = True
         _remove_pid(FRONTEND_PID_FILE)
 
-    # PID 文件未提供有效 PID 或 PID 已失效 → 通过端口杀死
+    # PID file did not provide valid PID or PID is stale → kill via port
     found_pid = _find_pid_by_port(5173)
     if found_pid:
         _kill_process(found_pid)
         _wait_for_process(found_pid)
         frontend_killed = True
 
-    # 二次检查：确保端口已释放
+    # Secondary check: ensure port is released
     if _find_pid_by_port(5173):
         _kill_process(_find_pid_by_port(5173))
         _wait_for_process(_find_pid_by_port(5173))
@@ -276,7 +276,7 @@ def stop_service() -> Tuple[bool, Optional[bool]]:
 
 def service_status() -> dict:
     """
-    返回服务状态（后端 + 前端）
+    Return service status (backend + frontend)
 
     Returns:
         {
@@ -302,12 +302,12 @@ def service_status() -> dict:
         "frontend_pid": frontend_pid if frontend_running else None,
         "host": settings.api_host,
         "port": settings.api_port,
-        "web_port": 5173,  # Vite 默认端口
+        "web_port": 5173,  # Vite default port
     }
 
 
 def _get_uvicorn_command(host: str, port: int) -> list:
-    """构建 uvicorn 命令"""
+    """Build uvicorn command"""
     return [
         sys.executable, "-m", "uvicorn",
         "aidb_proxy.main:app",
@@ -317,8 +317,8 @@ def _get_uvicorn_command(host: str, port: int) -> list:
 
 
 def _get_vite_command(port: int) -> list:
-    """构建 Vite 开发服务器命令"""
-    # Windows 上使用 npm.cmd
+    """Build Vite dev server command"""
+    # Use npm.cmd on Windows
     npm_cmd = "npm.cmd" if sys.platform == "win32" else "npm"
     return [
         npm_cmd, "run", "dev",

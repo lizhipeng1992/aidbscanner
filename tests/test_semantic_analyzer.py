@@ -1,4 +1,4 @@
-"""语义分析器单元测试"""
+"""Semantic analyzer unit tests"""
 import pytest
 from unittest.mock import Mock, patch, MagicMock
 import json
@@ -11,10 +11,10 @@ from ollama import RequestError
 
 
 class TestSemanticAnalyzer:
-    """SemanticAnalyzer 测试"""
+    """SemanticAnalyzer tests"""
 
     def test_analyzer_initialization(self):
-        """测试分析器初始化"""
+        """Test analyzer initialization"""
         with patch("core.semantic_analyzer.ChromaStore"):
             analyzer = SemanticAnalyzer()
             assert analyzer is not None
@@ -24,14 +24,14 @@ class TestSemanticAnalyzer:
 
     @patch("core.semantic_analyzer.ChromaStore")
     def test_analyzer_with_scanner(self, mock_chroma_store):
-        """测试带扫描器的分析器初始化"""
+        """Test analyzer initialization with scanner"""
         scanner = MySQLScanner()
         analyzer = SemanticAnalyzer(scanner=scanner)
         assert analyzer.scanner == scanner
 
     @patch("core.semantic_analyzer.ChromaStore")
     def test_get_system_prompt(self, mock_chroma_store):
-        """测试系统提示词"""
+        """Test system prompt"""
         analyzer = SemanticAnalyzer()
         prompt = analyzer._get_system_prompt()
         assert "数据语义专家" in prompt
@@ -39,7 +39,7 @@ class TestSemanticAnalyzer:
 
     @patch("core.semantic_analyzer.ChromaStore")
     def test_build_field_prompt(self, mock_chroma_store):
-        """测试构建字段提示词"""
+        """Test building field prompt"""
         analyzer = SemanticAnalyzer()
         column = ColumnMetadata(
             column_name="user_id",
@@ -66,7 +66,7 @@ class TestSemanticAnalyzer:
 
     @patch("core.semantic_analyzer.ChromaStore")
     def test_parse_semantic_response_valid_json(self, mock_chroma_store):
-        """测试解析有效 JSON 响应"""
+        """Test parsing valid JSON response"""
         analyzer = SemanticAnalyzer()
         response = '{"chinese_name": "用户标识", "business_definition": "用户的唯一标识", "data_category": "dimension"}'
 
@@ -77,7 +77,7 @@ class TestSemanticAnalyzer:
 
     @patch("core.semantic_analyzer.ChromaStore")
     def test_parse_semantic_response_with_markdown(self, mock_chroma_store):
-        """测试解析带 Markdown 标记的 JSON 响应"""
+        """Test parsing JSON response with Markdown markers"""
         analyzer = SemanticAnalyzer()
         response = """Here is the result:
 ```json
@@ -90,7 +90,7 @@ class TestSemanticAnalyzer:
 
     @patch("core.semantic_analyzer.ChromaStore")
     def test_parse_semantic_response_invalid(self, mock_chroma_store):
-        """测试解析无效 JSON 响应"""
+        """Test parsing invalid JSON response"""
         analyzer = SemanticAnalyzer()
         response = "这不是有效的 JSON 格式"
 
@@ -100,7 +100,7 @@ class TestSemanticAnalyzer:
 
     @patch("core.semantic_analyzer.ChromaStore")
     def test_create_default_semantic(self, mock_chroma_store):
-        """测试创建默认语义"""
+        """Test creating default semantic"""
         analyzer = SemanticAnalyzer()
         column = ColumnMetadata(
             column_name="created_at",
@@ -124,8 +124,8 @@ class TestSemanticAnalyzer:
 
     @patch("core.semantic_analyzer.ChromaStore")
     def test_analyze_field_success(self, mock_chroma_store):
-        """测试字段分析成功"""
-        # Mock ChromaStore 实例
+        """Test field analysis success"""
+        # Mock ChromaStore instance
         mock_store_instance = Mock()
         mock_chroma_store.return_value = mock_store_instance
 
@@ -155,13 +155,13 @@ class TestSemanticAnalyzer:
     @patch("core.semantic_analyzer.settings")
     @patch("core.semantic_analyzer.ChromaStore")
     def test_analyze_field_ollama_error(self, mock_chroma_store, mock_settings):
-        """测试字段分析 LLM 错误"""
+        """Test field analysis LLM error"""
         from core.llm_client import LLMError
 
-        # Mock settings 为 review 模式
+        # Mock settings to review mode
         mock_settings.effective_runtime_mode = "review"
 
-        # Mock ChromaStore 实例
+        # Mock ChromaStore instance
         mock_store_instance = Mock()
         mock_chroma_store.return_value = mock_store_instance
 
@@ -190,7 +190,7 @@ class TestSemanticAnalyzer:
     @patch("core.semantic_analyzer.ChromaStore")
     def test_analyze_table_success(self, mock_chroma_store):
         """测试表分析成功"""
-        # Mock ChromaStore 实例
+        # Mock ChromaStore instance
         mock_store_instance = Mock()
         mock_chroma_store.return_value = mock_store_instance
 
@@ -232,7 +232,7 @@ class TestSemanticAnalyzer:
     @patch("core.semantic_analyzer.ChromaStore")
     def test_verify_relationship_valid(self, mock_chroma_store):
         """测试关系验证通过"""
-        # Mock ChromaStore 实例
+        # Mock ChromaStore instance
         mock_store_instance = Mock()
         mock_chroma_store.return_value = mock_store_instance
 
@@ -260,7 +260,7 @@ class TestSemanticAnalyzer:
     @patch("core.semantic_analyzer.ChromaStore")
     def test_verify_relationship_invalid(self, mock_chroma_store):
         """测试关系验证失败"""
-        # Mock ChromaStore 实例
+        # Mock ChromaStore instance
         mock_store_instance = Mock()
         mock_chroma_store.return_value = mock_store_instance
 
@@ -290,7 +290,7 @@ class TestSemanticAnalyzer:
         """测试关系验证 LLM 错误时回退到匹配率判断"""
         from core.llm_client import LLMError
 
-        # Mock ChromaStore 实例
+        # Mock ChromaStore instance
         mock_store_instance = Mock()
         mock_chroma_store.return_value = mock_store_instance
 

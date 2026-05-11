@@ -1,1 +1,1 @@
-"""AI Database Proxy - API 服务模块"""
+"""AI Database Proxy - API service module"""

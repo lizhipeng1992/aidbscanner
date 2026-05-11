@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 class QueryResult:
-    """查询结果封装"""
+    """Query result wrapper"""
 
     def __init__(
         self,
@@ -96,15 +96,15 @@ class QueryEngine:
         return self._llm_client
 
     def query(self, question: str, db_name: Optional[str] = None, top_k: int = 10) -> QueryResult:
-        """执行自然语言查询
+        """Execute natural language query
 
         Args:
-            question: 自然语言问题
-            db_name: 可选的数据库名过滤
-            top_k: 检索结果数量
+            question: Natural language question
+            db_name: Optional database name filter
+            top_k: Number of retrieval results
 
         Returns:
-            QueryResult 包含答案和检索结果
+            QueryResult containing answer and retrieval results
         """
         try:
             # 检索相关字段和表
@@ -123,16 +123,16 @@ class QueryEngine:
                 relevant_tables=search_results.get("tables", []),
             )
         except Exception as e:
-            logger.error(f"查询失败：{e}")
+            logger.error(f"Query failed: {e}")
             return QueryResult(
                 question=question,
-                answer=f"查询过程中发生错误：{str(e)}",
+                answer=f"An error occurred during query: {str(e)}",
                 has_error=True,
                 error_message=str(e),
             )
 
     def _retrieve(self, question: str, db_name: Optional[str], top_k: int) -> Dict[str, Any]:
-        """根据存储后端类型执行检索"""
+        """Execute retrieval based on storage backend type"""
         result: Dict[str, Any] = {"fields": [], "tables": []}
 
         if self._storage_type == "milvus":
@@ -140,13 +140,13 @@ class QueryEngine:
         elif self._storage_type == "chroma":
             result = self._retrieve_chroma(question, db_name, top_k)
         else:
-            # 无存储后端，尝试 ChromaStore 作为默认
+            # No storage backend, try ChromaStore as default
             result = self._retrieve_chroma(question, db_name, top_k)
 
         return result
 
     def _retrieve_milvus(self, question: str, db_name: Optional[str], top_k: int) -> Dict[str, Any]:
-        """Milvus 后端检索"""
+        """Milvus backend retrieval"""
         result: Dict[str, Any] = {"fields": [], "tables": []}
 
         kb = self.knowledge_base
@@ -186,12 +186,12 @@ class QueryEngine:
                     })
 
         except Exception as e:
-            logger.error(f"Milvus 检索失败：{e}")
+            logger.error(f"Milvus retrieval failed: {e}")
 
         return result
 
     def _retrieve_chroma(self, question: str, db_name: Optional[str], top_k: int) -> Dict[str, Any]:
-        """ChromaDB 后端检索"""
+        """ChromaDB backend retrieval"""
         result: Dict[str, Any] = {"fields": [], "tables": []}
 
         try:
@@ -232,12 +232,12 @@ class QueryEngine:
                     })
 
         except Exception as e:
-            logger.error(f"ChromaDB 检索失败：{e}")
+            logger.error(f"ChromaDB retrieval failed: {e}")
 
         return result
 
     def _build_rag_context(self, question: str, search_results: Dict[str, Any]) -> RAGContext:
-        """从搜索结果构建 RAG 上下文"""
+        """Build RAG context from search results"""
         fields = []
         for item in search_results.get("fields", []):
             fields.append(FieldSemantic(
@@ -271,11 +271,11 @@ class QueryEngine:
         )
 
     def _generate_answer(self, rag_context: RAGContext) -> str:
-        """使用 LLM 基于 RAG 上下文生成答案"""
+        """Generate answer using LLM based on RAG context"""
         prompt = rag_context.to_prompt()
 
         if not prompt.strip():
-            return "未找到相关的数据库语义信息，请先运行扫描分析存储语义数据后再进行查询。"
+            return "No relevant database semantic information found. Please run a scan analysis to store semantic data before querying."
 
         messages = [
             ChatMessage(role="system", content=self.SYSTEM_PROMPT),
@@ -286,6 +286,6 @@ class QueryEngine:
             response = self.llm_client.chat(messages)
             return response.content
         except Exception as e:
-            logger.error(f"LLM 生成答案失败：{e}")
-            # 降级：返回检索到的上下文
-            return f"无法生成答案（{str(e)}）。\n\n检索到的相关语义信息：\n{prompt}"
+            logger.error(f"Failed to generate answer with LLM: {e}")
+            # Fallback: return retrieved context
+            return f"Unable to generate answer ({str(e)}).\n\nRetrieved relevant semantic information:\n{prompt}"

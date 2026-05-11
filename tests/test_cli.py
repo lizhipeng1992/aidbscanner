@@ -1,4 +1,4 @@
-"""CLI 命令行接口单元测试"""
+"""CLI interface unit tests"""
 import pytest
 from unittest.mock import Mock, patch
 from click.testing import CliRunner
@@ -8,17 +8,17 @@ from cli import cli
 
 @pytest.fixture
 def runner():
-    """创建 CLI 测试运行器"""
+    """Create CLI test runner"""
     return CliRunner()
 
 
 class TestHealthCommand:
-    """health 命令测试"""
+    """health command tests"""
 
     @patch("builtins.ollama", create=True)
     @patch("cli.get_scanner")
     def test_health_success(self, mock_get_scanner, mock_ollama, runner):
-        """测试健康检查成功"""
+        """Test health check success"""
         mock_scanner = Mock()
         mock_get_scanner.return_value = mock_scanner
         mock_scanner.list_databases.return_value = ["test"]
@@ -35,7 +35,7 @@ class TestHealthCommand:
     @patch("builtins.ollama", create=True)
     @patch("cli.get_scanner")
     def test_health_unhealthy(self, mock_get_scanner, mock_ollama, runner):
-        """测试健康检查失败"""
+        """Test health check failure"""
         from mysql.connector import Error as MySQLError
         mock_get_scanner.side_effect = MySQLError("Connection refused")
         mock_ollama.Client.return_value = Mock()
@@ -47,11 +47,11 @@ class TestHealthCommand:
 
 
 class TestDatabasesCommand:
-    """databases 命令测试"""
+    """databases command tests"""
 
     @patch("cli.MySQLScanner.list_databases")
     def test_databases_success(self, mock_list, runner):
-        """测试列出数据库成功"""
+        """Test listing databases success"""
         mock_list.return_value = ["test_db", "prod_db", "mysql"]
 
         response = runner.invoke(cli, ["databases"])
@@ -59,26 +59,26 @@ class TestDatabasesCommand:
         assert response.exit_code == 0
         assert "test_db" in response.output
         assert "prod_db" in response.output
-        assert "mysql" not in response.output  # 系统数据库被过滤
+        assert "mysql" not in response.output  # System databases filtered
 
     @patch("cli.MySQLScanner.list_databases")
     def test_databases_error(self, mock_list, runner):
-        """测试列出数据库失败"""
+        """Test listing databases failure"""
         from mysql.connector import Error as MySQLError
         mock_list.side_effect = MySQLError("Connection failed")
 
         response = runner.invoke(cli, ["databases"])
 
         assert response.exit_code == 1
-        assert "错误" in response.output
+        assert "Error" in response.output
 
 
 class TestTablesCommand:
-    """tables 命令测试"""
+    """tables command tests"""
 
     @patch("cli.MySQLScanner.scan_database")
     def test_tables_success(self, mock_scan, runner):
-        """测试列出表成功"""
+        """Test listing tables success"""
         from core.models import TableMetadata, ColumnMetadata
 
         mock_scan.return_value = [
@@ -106,23 +106,23 @@ class TestTablesCommand:
 
     @patch("cli.MySQLScanner.scan_database")
     def test_tables_not_found(self, mock_scan, runner):
-        """测试数据库不存在"""
+        """Test database not found"""
         mock_scan.return_value = []
 
         response = runner.invoke(cli, ["tables", "nonexistent"])
 
         assert response.exit_code == 1
-        assert "不存在" in response.output
+        assert "does not exist" in response.output
 
 
 class TestFieldCommand:
-    """field 命令测试"""
+    """field command tests"""
 
     @patch("cli.SemanticAnalyzer.analyze_field")
     @patch("cli.MySQLScanner.get_sample_data")
     @patch("cli.MySQLScanner.scan_table_only")
     def test_field_success(self, mock_scan, mock_samples, mock_analyze, runner):
-        """测试字段分析成功"""
+        """Test field analysis success"""
         from core.models import TableMetadata, ColumnMetadata, FieldSemantic, DataCategory, ColumnType
 
         mock_scan.return_value = TableMetadata(
@@ -162,12 +162,12 @@ class TestFieldCommand:
 
 
 class TestAnalyzeCommand:
-    """analyze 命令测试"""
+    """analyze command tests"""
 
     @patch("cli.SemanticAnalyzer.analyze_table")
     @patch("cli.MySQLScanner.scan_table_only")
     def test_analyze_success(self, mock_scan, mock_analyze, runner):
-        """测试表分析成功"""
+        """Test table analysis success"""
         from core.models import TableMetadata, ColumnMetadata, TableSemantic, FieldSemantic, DataCategory, ColumnType
 
         mock_scan.return_value = TableMetadata(
@@ -266,7 +266,7 @@ class TestReviewPendingCommand:
         response = runner.invoke(cli, ["review-pending"])
 
         assert response.exit_code == 0
-        assert "待审核字段列表" in response.output
+        assert "Pending field reviews" in response.output
         assert "test_db.users.id" in response.output
         assert "用户 ID" in response.output
 
@@ -278,7 +278,7 @@ class TestReviewPendingCommand:
         response = runner.invoke(cli, ["review-pending"])
 
         assert response.exit_code == 0
-        assert "暂无待审核字段" in response.output
+        assert "No pending field reviews" in response.output
 
     @patch("cli.get_pending_fields")
     def test_review_pending_with_db_filter(self, mock_get_pending, runner):
@@ -307,7 +307,7 @@ class TestReviewSubmitCommand:
         )
 
         assert response.exit_code == 0
-        assert "已确认" in response.output
+        assert "[OK] Approved" in response.output
         assert mock_storage.submit_field.call_count == 2
 
     @patch("cli.get_storage")
@@ -320,7 +320,7 @@ class TestReviewSubmitCommand:
         response = runner.invoke(cli, ["review-submit", "test_db.users.id"])
 
         assert response.exit_code == 0
-        assert "确认失败" in response.output
+        assert "[FAIL] Approval failed" in response.output
 
 
 class TestReviewRejectCommand:
@@ -336,7 +336,7 @@ class TestReviewRejectCommand:
         response = runner.invoke(cli, ["review-reject", "test_db.users.id"])
 
         assert response.exit_code == 0
-        assert "已拒绝" in response.output
+        assert "[OK] Rejected" in response.output
         mock_storage.reject_field.assert_called_once_with("test_db.users.id")
 
     @patch("cli.get_storage")
@@ -349,7 +349,7 @@ class TestReviewRejectCommand:
         response = runner.invoke(cli, ["review-reject", "test_db.users.id"])
 
         assert response.exit_code == 0
-        assert "拒绝失败" in response.output
+        assert "[FAIL] Rejection failed" in response.output
 
 
 class TestReviewModifyCommand:
@@ -374,7 +374,7 @@ class TestReviewModifyCommand:
         )
 
         assert response.exit_code == 0
-        assert "已修改并确认" in response.output
+        assert "[OK] Modified and approved" in response.output
         mock_storage.modify_field.assert_called_once()
 
     @patch("cli.get_storage")
@@ -394,5 +394,5 @@ class TestReviewModifyCommand:
         )
 
         assert response.exit_code == 0
-        assert "修改失败" in response.output
+        assert "[FAIL] Modification failed" in response.output
 

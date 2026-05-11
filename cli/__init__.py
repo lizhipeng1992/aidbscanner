@@ -1,4 +1,4 @@
-"""CLI 命令行接口"""
+"""CLI command interface"""
 import click
 import json
 from typing import Optional, List, Dict, Any
@@ -10,24 +10,24 @@ from core.chroma_store import ChromaStore
 
 
 def get_scanner() -> MySQLScanner:
-    """获取 MySQL 扫描器实例"""
+    """Get MySQL scanner instance"""
     return MySQLScanner()
 
 
 def get_analyzer(scanner: Optional[MySQLScanner] = None) -> SemanticAnalyzer:
-    """获取语义分析器实例"""
+    """Get semantic analyzer instance"""
     if scanner is None:
         scanner = get_scanner()
     return SemanticAnalyzer(scanner)
 
 
 def get_storage() -> ChromaStore:
-    """获取 ChromaDB 存储实例"""
+    """Get ChromaDB storage instance"""
     return ChromaStore(settings.semantic_storage_path)
 
 
 def get_pending_fields(db_name: Optional[str] = None) -> List[Dict[str, Any]]:
-    """获取待审核字段列表"""
+    """Get pending field review list"""
     storage = get_storage()
     return storage.get_pending_fields(db_name)
 
@@ -35,13 +35,13 @@ def get_pending_fields(db_name: Optional[str] = None) -> List[Dict[str, Any]]:
 @click.group()
 @click.version_option(version="1.0.0")
 def cli():
-    """AI Database Scanner - 基于本地 LLM 的 MySQL 数据库语义层扫描工具"""
+    """AI Database Scanner - MySQL database semantic layer scanner using local LLM"""
     pass
 
 
 @cli.command()
 def health():
-    """检查服务健康状态"""
+    """Check service health status"""
     from core.llm_client import LLMProvider
 
     mysql_status = "unknown"
@@ -55,7 +55,7 @@ def health():
     except Exception as e:
         mysql_status = f"error: {e}"
 
-    # 根据配置检查对应的 LLM 服务
+    # Check the corresponding LLM service based on configuration
     try:
         if llm_provider == "ollama":
             import ollama
@@ -87,44 +87,44 @@ def health():
 
 @cli.command()
 def databases():
-    """列出所有数据库"""
+    """List all databases"""
     try:
         scanner = get_scanner()
         databases = scanner.list_databases()
         system_dbs = {"information_schema", "mysql", "performance_schema", "sys"}
         databases = [db for db in databases if db not in system_dbs]
 
-        click.echo("可用数据库:")
+        click.echo("Available databases:")
         for db in databases:
             click.echo(f"  - {db}")
     except Exception as e:
-        click.echo(f"错误：{e}", err=True)
+        click.echo(f"Error:{e}", err=True)
         raise click.Abort()
 
 
 @cli.command()
 @click.argument("db_name")
 def tables(db_name: str):
-    """列出指定数据库的所有表"""
+    """List all tables in a specified database"""
     try:
         scanner = get_scanner()
         tables = scanner.scan_database(db_name)
 
         if not tables:
-            click.echo(f"错误：数据库不存在：{db_name}", err=True)
+            click.echo(f"Error: Database does not exist: {db_name}", err=True)
             raise click.Abort()
 
-        click.echo(f"数据库 [{db_name}] 的表:")
+        click.echo(f"Tables in [{db_name}]:")
         for table in tables:
             click.echo(f"\n  {table.table_name}")
             if table.table_comment:
-                click.echo(f"    说明：{table.table_comment}")
-            click.echo(f"    引擎：{table.engine}")
-            click.echo(f"    字段数：{len(table.columns)}")
+                click.echo(f"    Comment: {table.table_comment}")
+            click.echo(f"    Engine: {table.engine}")
+            click.echo(f"    Columns: {len(table.columns)}")
     except click.Abort:
         raise
     except Exception as e:
-        click.echo(f"错误：{e}", err=True)
+        click.echo(f"Error:{e}", err=True)
         raise click.Abort()
 
 
@@ -133,24 +133,24 @@ def tables(db_name: str):
 @click.argument("table_name")
 @click.argument("column_name")
 def field(db_name: str, table_name: str, column_name: str):
-    """分析单个字段的语义"""
+    """Analyze semantics of a single field"""
     try:
         scanner = get_scanner()
         analyzer = get_analyzer(scanner)
 
         target_table = scanner.scan_table_only(db_name, table_name)
         if not target_table:
-            click.echo(f"错误：数据库或表不存在：{db_name}.{table_name}", err=True)
+            click.echo(f"Error: Database or table does not exist: {db_name}.{table_name}", err=True)
             raise click.Abort()
 
         target_column = next((c for c in target_table.columns if c.column_name == column_name), None)
         if not target_column:
-            click.echo(f"错误：字段不存在：{column_name}", err=True)
+            click.echo(f"Error: Field does not exist: {column_name}", err=True)
             raise click.Abort()
 
         sample_values = scanner.get_sample_data(db_name, table_name, column_name)
 
-        click.echo(f"正在分析字段 [{db_name}.{table_name}.{column_name}]...")
+        click.echo(f"Analyzing field [{db_name}.{table_name}.{column_name}]...")
         field_semantic = analyzer.analyze_field(target_column, table_name, db_name, sample_values)
 
         result = {
@@ -166,26 +166,26 @@ def field(db_name: str, table_name: str, column_name: str):
     except click.Abort:
         raise
     except Exception as e:
-        click.echo(f"错误：{e}", err=True)
+        click.echo(f"Error:{e}", err=True)
         raise click.Abort()
 
 
 @cli.command()
 @click.argument("db_name")
 @click.argument("table_name")
-@click.option("--sample-size", default=5, help="示例数据行数 (1-20)")
+@click.option("--sample-size", default=5, help="Number of sample rows (1-20)")
 def analyze(db_name: str, table_name: str, sample_size: int):
-    """分析整张表的语义"""
+    """Analyze the semantics of an entire table"""
     try:
         scanner = get_scanner()
         analyzer = get_analyzer(scanner)
 
         target_table = scanner.scan_table_only(db_name, table_name)
         if not target_table:
-            click.echo(f"错误：数据库或表不存在：{db_name}.{table_name}", err=True)
+            click.echo(f"Error: Database or table does not exist: {db_name}.{table_name}", err=True)
             raise click.Abort()
 
-        click.echo(f"正在分析表 [{db_name}.{table_name}]...")
+        click.echo(f"Analyzing table [{db_name}.{table_name}]...")
         table_semantic = analyzer.analyze_table(target_table, db_name, sample_size)
 
         result = {
@@ -208,32 +208,32 @@ def analyze(db_name: str, table_name: str, sample_size: int):
     except click.Abort:
         raise
     except Exception as e:
-        click.echo(f"错误：{e}", err=True)
+        click.echo(f"Error:{e}", err=True)
         raise click.Abort()
 
 
 @cli.command()
 @click.argument("db_name")
-@click.option("--sample-size", default=5, help="示例数据行数 (1-20)")
-@click.option("--verify-relationships", is_flag=True, default=True, help="验证表间关系")
+@click.option("--sample-size", default=5, help="Number of sample rows (1-20)")
+@click.option("--verify-relationships", is_flag=True, default=True, help="Verify table relationships")
 def scan(db_name: str, sample_size: int, verify_relationships: bool):
-    """全量扫描数据库并分析语义"""
+    """Full scan of database and semantic analysis"""
     try:
         scanner = get_scanner()
         analyzer = get_analyzer(scanner)
 
-        click.echo(f"正在扫描数据库 [{db_name}]...")
+        click.echo(f"Scanning database [{db_name}]...")
         tables = scanner.scan_database(db_name)
         if not tables:
-            click.echo(f"错误：数据库不存在：{db_name}", err=True)
+            click.echo(f"Error: Database does not exist: {db_name}", err=True)
             raise click.Abort()
 
-        click.echo(f"发现 {len(tables)} 张表，正在分析语义...")
+        click.echo(f"Found {len(tables)} tables, analyzing semantics...")
         table_semantics = analyzer.batch_analyze_tables(tables, db_name, sample_size)
 
         relationships = []
         if verify_relationships:
-            click.echo("正在发现表间关系...")
+            click.echo("Discovering table relationships...")
             candidates = scanner.discover_foreign_key_candidates(tables)
             for rel in candidates:
                 match_rate = scanner.calculate_match_rate(db_name, rel)
@@ -280,85 +280,85 @@ def scan(db_name: str, sample_size: int, verify_relationships: bool):
     except click.Abort:
         raise
     except Exception as e:
-        click.echo(f"错误：{e}", err=True)
+        click.echo(f"Error:{e}", err=True)
         raise click.Abort()
 
 
-# ==================== 审核相关命令 ====================
+# ==================== Review Commands ====================
 
 
 @cli.command()
-@click.option("--db-name", default=None, help="过滤指定数据库")
+@click.option("--db-name", default=None, help="Filter by database")
 def review_pending(db_name: Optional[str]):
-    """列出待审核字段"""
+    """List pending field reviews"""
     try:
         pending_fields = get_pending_fields(db_name)
 
         if not pending_fields:
-            click.echo("暂无待审核字段")
+            click.echo("No pending field reviews")
             return
 
-        click.echo(f"待审核字段列表 (共 {len(pending_fields)} 个):")
+        click.echo(f"Pending field reviews (total: {len(pending_fields)}):")
         click.echo("-" * 80)
 
         for field in pending_fields:
-            click.echo(f"字段 ID: {field['field_id']}")
-            click.echo(f"  中文名：{field.get('chinese_name', 'N/A')}")
-            click.echo(f"  业务定义：{field.get('business_definition', 'N/A')[:50]}...")
-            click.echo(f"  数据分类：{field.get('data_category', 'N/A')}")
-            click.echo(f"  创建时间：{field.get('created_at', 'N/A')}")
+            click.echo(f"Field ID: {field['field_id']}")
+            click.echo(f"  Chinese Name: {field.get('chinese_name', 'N/A')}")
+            click.echo(f"  Business Definition: {field.get('business_definition', 'N/A')[:50]}...")
+            click.echo(f"  Data Category: {field.get('data_category', 'N/A')}")
+            click.echo(f"  Created At: {field.get('created_at', 'N/A')}")
             click.echo("-" * 80)
     except Exception as e:
-        click.echo(f"错误：{e}", err=True)
+        click.echo(f"Error:{e}", err=True)
         raise click.Abort()
 
 
 @cli.command()
-@click.option("--db-name", default=None, help="过滤指定数据库")
+@click.option("--db-name", default=None, help="Filter by database")
 def review_interactive(db_name: Optional[str]):
-    """交互式审核字段"""
+    """Interactive field review"""
     try:
         storage = get_storage()
         pending_fields = get_pending_fields(db_name)
 
         if not pending_fields:
-            click.echo("暂无待审核字段")
+            click.echo("No pending field reviews")
             return
 
-        click.echo(f"发现 {len(pending_fields)} 个待审核字段\n")
+        click.echo(f"Found {len(pending_fields)} pending field reviews\n")
 
         for idx, field in enumerate(pending_fields, 1):
-            click.echo(f"[{idx}/{len(pending_fields)}] 字段：{field['field_id']}")
-            click.echo(f"  中文名：{field.get('chinese_name', 'N/A')}")
-            click.echo(f"  业务定义：{field.get('business_definition', 'N/A')}")
-            click.echo(f"  取值规则：{field.get('value_rules', 'N/A')}")
-            click.echo(f"  数据分类：{field.get('data_category', 'N/A')}")
+            click.echo(f"[{idx}/{len(pending_fields)}] Field: {field['field_id']}")
+            click.echo(f"  Chinese Name: {field.get('chinese_name', 'N/A')}")
+            click.echo(f"  Business Definition: {field.get('business_definition', 'N/A')}")
+            click.echo(f"  Value Rules: {field.get('value_rules', 'N/A')}")
+            click.echo(f"  Data Category: {field.get('data_category', 'N/A')}")
             click.echo("")
 
-            # 询问操作
+            # Ask for action
             while True:
                 action = click.prompt(
-                    "请选择操作",
+                    "Choose action",
                     type=click.Choice(['y', 'm', 'n', 's'], case_sensitive=False),
                     show_choices=True,
                     show_default=False,
-                    value_prompt="y=确认，m=修改，n=拒绝，s=跳过"
+                    value_prompt="y=Approve, m=Modify, n=Reject, s=Skip"
                 )
 
-                if action == 'y':  # 确认
-                    calibrated_by = click.prompt("请输入审核人姓名", default="admin")
+                if action == 'y':  # Approve
+                    calibrated_by = click.prompt("Enter reviewer name", default="admin")
                     if storage.submit_field(field['field_id'], calibrated_by):
-                        click.echo("[OK] 已确认\n")
+                        click.echo("[OK] Approved\n")
                     else:
-                        click.echo("[FAIL] 确认失败\n")
+                        click.echo("[FAIL] Approval failed\n")
                     break
 
-                elif action == 'm':  # 修改
-                    click.echo("请输入修改内容（直接回车保持原值）：")
-                    chinese_name = click.prompt("中文名", default=field.get('chinese_name', ''))
-                    business_definition = click.prompt("业务定义", default=field.get('business_definition', ''))
-                    value_rules = click.prompt("取值规则", default=field.get('value_rules', ''))
-                    data_category = click.prompt("数据分类 (dimension/metric/fact/other)", default=field.get('data_category', 'other'))
+                elif action == 'm':  # Modify
+                    click.echo("Enter modifications (press Enter to keep original):")
+                    chinese_name = click.prompt("Chinese Name", default=field.get('chinese_name', ''))
+                    business_definition = click.prompt("Business Definition", default=field.get('business_definition', ''))
+                    value_rules = click.prompt("Value Rules", default=field.get('value_rules', ''))
+                    data_category = click.prompt("Data Category (dimension/metric/fact/other)", default=field.get('data_category', 'other'))
 
                     modifications = {}
                     if chinese_name and chinese_name != field.get('chinese_name'):
@@ -370,54 +370,54 @@ def review_interactive(db_name: Optional[str]):
                     if data_category and data_category != field.get('data_category'):
                         modifications['data_category'] = data_category
 
-                    calibrated_by = click.prompt("请输入审核人姓名", default="admin")
+                    calibrated_by = click.prompt("Enter reviewer name", default="admin")
 
                     if modifications:
                         if storage.modify_field(field['field_id'], modifications, calibrated_by):
-                            click.echo("[OK] 已修改并确认\n")
+                            click.echo("[OK] Modified and approved\n")
                         else:
-                            click.echo("[FAIL] 修改失败\n")
+                            click.echo("[FAIL] Modification failed\n")
                     else:
                         if storage.submit_field(field['field_id'], calibrated_by):
-                            click.echo("[OK] 已确认（无修改）\n")
+                            click.echo("[OK] Approved (no changes)\n")
                         else:
-                            click.echo("[FAIL] 确认失败\n")
+                            click.echo("[FAIL] Approval failed\n")
                     break
 
-                elif action == 'n':  # 拒绝
-                    if click.confirm("确认拒绝此字段？"):
+                elif action == 'n':  # Reject
+                    if click.confirm("Confirm rejection of this field?"):
                         if storage.reject_field(field['field_id']):
-                            click.echo("[OK] 已拒绝\n")
+                            click.echo("[OK] Rejected\n")
                         else:
-                            click.echo("[FAIL] 拒绝失败\n")
+                            click.echo("[FAIL] Rejection failed\n")
                     break
 
-                elif action == 's':  # 跳过（实际也是拒绝）
+                elif action == 's':  # Skip (also rejection)
                     if storage.reject_field(field['field_id']):
-                        click.echo("[SKIP] 已跳过\n")
+                        click.echo("[SKIP] Skipped\n")
                     else:
-                        click.echo("[FAIL] 跳过失败\n")
+                        click.echo("[FAIL] Skip failed\n")
                     break
 
     except click.Abort:
-        click.echo("\n审核已取消")
+        click.echo("\nReview cancelled")
         raise
     except Exception as e:
-        click.echo(f"错误：{e}", err=True)
+        click.echo(f"Error:{e}", err=True)
         raise click.Abort()
 
 
 @cli.command()
 @click.argument("field_ids", nargs=-1)
-@click.option("--calibrated-by", default="admin", help="审核人姓名")
+@click.option("--calibrated-by", default="admin", help="Reviewer name")
 def review_submit(field_ids: tuple, calibrated_by: str):
-    """批量确认指定字段
+    """Batch approve specified fields
 
-    FIELD_IDS: 字段 ID 列表，格式为 db.table.column
+    FIELD_IDS: Field IDs list, format: db.table.column
     """
     try:
         if not field_ids:
-            click.echo("错误：请至少指定一个字段 ID", err=True)
+            click.echo("Error: Please specify at least one field ID", err=True)
             raise click.Abort()
 
         storage = get_storage()
@@ -426,30 +426,30 @@ def review_submit(field_ids: tuple, calibrated_by: str):
 
         for field_id in field_ids:
             if storage.submit_field(field_id, calibrated_by):
-                click.echo(f"[OK] 已确认：{field_id}")
+                click.echo(f"[OK] Approved: {field_id}")
                 success_count += 1
             else:
-                click.echo(f"[FAIL] 确认失败：{field_id}")
+                click.echo(f"[FAIL] Approval failed: {field_id}")
                 fail_count += 1
 
-        click.echo(f"\n批量确认完成：成功 {success_count}，失败 {fail_count}")
+        click.echo(f"\nBatch approval complete: {success_count} succeeded, {fail_count} failed")
     except click.Abort:
         raise
     except Exception as e:
-        click.echo(f"错误：{e}", err=True)
+        click.echo(f"Error:{e}", err=True)
         raise click.Abort()
 
 
 @cli.command()
 @click.argument("field_ids", nargs=-1)
 def review_reject(field_ids: tuple):
-    """拒绝指定字段
+    """Reject specified fields
 
-    FIELD_IDS: 字段 ID 列表，格式为 db.table.column
+    FIELD_IDS: Field IDs list, format: db.table.column
     """
     try:
         if not field_ids:
-            click.echo("错误：请至少指定一个字段 ID", err=True)
+            click.echo("Error: Please specify at least one field ID", err=True)
             raise click.Abort()
 
         storage = get_storage()
@@ -458,27 +458,27 @@ def review_reject(field_ids: tuple):
 
         for field_id in field_ids:
             if storage.reject_field(field_id):
-                click.echo(f"[OK] 已拒绝：{field_id}")
+                click.echo(f"[OK] Rejected: {field_id}")
                 success_count += 1
             else:
-                click.echo(f"[FAIL] 拒绝失败：{field_id}")
+                click.echo(f"[FAIL] Rejection failed: {field_id}")
                 fail_count += 1
 
-        click.echo(f"\n批量拒绝完成：成功 {success_count}，失败 {fail_count}")
+        click.echo(f"\nBatch rejection complete: {success_count} succeeded, {fail_count} failed")
     except click.Abort:
         raise
     except Exception as e:
-        click.echo(f"错误：{e}", err=True)
+        click.echo(f"Error:{e}", err=True)
         raise click.Abort()
 
 
 @cli.command()
 @click.argument("field_id")
-@click.option("--chinese-name", default=None, help="修改中文名")
-@click.option("--business-definition", default=None, help="修改业务定义")
-@click.option("--value-rules", default=None, help="修改取值规则")
-@click.option("--data-category", default=None, help="修改数据分类 (dimension/metric/fact/other)")
-@click.option("--calibrated-by", default="admin", help="审核人姓名")
+@click.option("--chinese-name", default=None, help="Modify Chinese name")
+@click.option("--business-definition", default=None, help="Modify business definition")
+@click.option("--value-rules", default=None, help="Modify value rules")
+@click.option("--data-category", default=None, help="Modify data category (dimension/metric/fact/other)")
+@click.option("--calibrated-by", default="admin", help="Reviewer name")
 def review_modify(
     field_id: str,
     chinese_name: Optional[str],
@@ -487,9 +487,9 @@ def review_modify(
     data_category: Optional[str],
     calibrated_by: str
 ):
-    """修改并确认字段
+    """Modify and confirm field
 
-    FIELD_ID: 字段 ID，格式为 db.table.column
+    FIELD_ID: Field ID, format: db.table.column
     """
     try:
         storage = get_storage()
@@ -505,69 +505,69 @@ def review_modify(
             modifications['data_category'] = data_category
 
         if not modifications:
-            click.echo("警告：未指定任何修改项，将直接确认字段")
+            click.echo("Warning: No modifications specified, approving directly")
             if storage.submit_field(field_id, calibrated_by):
-                click.echo(f"[OK] 已确认：{field_id}")
+                click.echo(f"[OK] Approved: {field_id}")
             else:
-                click.echo(f"[FAIL] 确认失败：{field_id}")
+                click.echo(f"[FAIL] Approval failed: {field_id}")
             return
 
         if storage.modify_field(field_id, modifications, calibrated_by):
-            click.echo(f"[OK] 已修改并确认：{field_id}")
-            click.echo("修改内容：")
+            click.echo(f"[OK] Modified and approved: {field_id}")
+            click.echo("Modifications:")
             for key, value in modifications.items():
                 click.echo(f"  {key}: {value}")
         else:
-            click.echo(f"[FAIL] 修改失败：{field_id}")
+            click.echo(f"[FAIL] Modification failed: {field_id}")
     except Exception as e:
-        click.echo(f"错误：{e}", err=True)
+        click.echo(f"Error:{e}", err=True)
         raise click.Abort()
 
 
 @cli.command()
 @click.argument("question")
-@click.option("--db-name", default=None, help="过滤指定数据库")
-@click.option("--top-k", default=10, help="返回结果数量 (1-50)")
+@click.option("--db-name", default=None, help="Filter by database")
+@click.option("--top-k", default=10, help="Number of results (1-50)")
 def query(question: str, db_name: Optional[str], top_k: int):
-    """自然语言查询数据库语义"""
+    """Query database semantics with natural language"""
     try:
         from rich.markdown import Markdown
         from core.query_engine import QueryEngine
 
-        click.echo(f"正在查询：{question}\n")
+        click.echo(f"Querying: {question}\n")
 
         engine = QueryEngine()
         result = engine.query(question=question, db_name=db_name, top_k=top_k)
 
         if result.has_error:
-            click.echo(f"[bold red]错误：{result.error_message}[/bold red]\n")
+            click.echo(f"[bold red]Error: {result.error_message}[/bold red]\n")
 
-        click.echo(f"[bold]回答：[/bold]{result.answer}\n")
+        click.echo(f"[bold]Answer:[/bold]{result.answer}\n")
 
         if result.fields:
-            click.echo(f"[bold]相关字段（共 {len(result.fields)} 个）：[/bold]")
+            click.echo(f"[bold]Related fields (total: {len(result.fields)}):[/bold]")
             for field in result.fields:
                 click.echo(f"  - [cyan]{field['table_name']}.{field['column_name']}[/cyan]")
                 if field.get("chinese_name"):
-                    click.echo(f"    中文名：{field['chinese_name']}")
+                    click.echo(f"    Chinese Name: {field['chinese_name']}")
                 if field.get("business_definition"):
-                    click.echo(f"    业务定义：{field['business_definition']}")
+                    click.echo(f"    Business Definition: {field['business_definition']}")
                 if field.get("relevance_score", 0) > 0:
-                    click.echo(f"    相关度：{field['relevance_score']:.2f}")
+                    click.echo(f"    Relevance: {field['relevance_score']:.2f}")
                 click.echo("")
 
         if result.tables:
-            click.echo(f"[bold]相关表（共 {len(result.tables)} 张）：[/bold]")
+            click.echo(f"[bold]Related tables (total: {len(result.tables)}):[/bold]")
             for table in result.tables:
                 click.echo(f"  - [magenta]{table['db_name']}.{table['table_name']}[/magenta]")
                 if table.get("chinese_name"):
-                    click.echo(f"    中文名：{table['chinese_name']}")
+                    click.echo(f"    Chinese Name: {table['chinese_name']}")
                 if table.get("business_definition"):
-                    click.echo(f"    业务定义：{table['business_definition']}")
+                    click.echo(f"    Business Definition: {table['business_definition']}")
                 click.echo("")
 
     except Exception as e:
-        click.echo(f"[bold red]错误：{e}[/bold red]", err=True)
+        click.echo(f"[bold red]Error: {e}[/bold red]", err=True)
         raise click.Abort()
 
 

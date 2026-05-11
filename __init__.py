@@ -1,2 +1,2 @@
-"""AI 数据库语义层扫描工具"""
+"""AI Database Semantic Layer Scanner"""
 __version__ = "0.1.0"

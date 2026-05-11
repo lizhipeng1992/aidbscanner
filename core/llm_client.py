@@ -1,4 +1,4 @@
-"""LLM 客户端抽象层，支持多种大模型接入方式"""
+"""LLM client abstraction layer supporting multiple model providers"""
 import logging
 from abc import ABC, abstractmethod
 from typing import List, Dict, Any, Optional
@@ -8,13 +8,13 @@ logger = logging.getLogger(__name__)
 
 
 class LLMProvider(Enum):
-    """LLM 提供商枚举"""
+    """LLM provider enumeration"""
     OLLAMA = "ollama"
     OPENAI = "openai"
 
 
 class ChatMessage:
-    """聊天消息"""
+    """Chat message"""
 
     def __init__(self, role: str, content: str):
         self.role = role
@@ -25,14 +25,14 @@ class ChatMessage:
 
 
 class ChatResponse:
-    """聊天响应"""
+    """Chat response"""
 
     def __init__(self, content: str):
         self.content = content
 
 
 class BaseLLMClient(ABC):
-    """LLM 客户端基类"""
+    """Base LLM client class"""
 
     @abstractmethod
     def chat(
@@ -40,23 +40,23 @@ class BaseLLMClient(ABC):
         messages: List[ChatMessage],
         timeout: Optional[int] = None,
     ) -> ChatResponse:
-        """发送聊天请求
+        """Send chat request
 
         Args:
-            messages: 消息列表
-            timeout: 超时时间（秒）
+            messages: Message list
+            timeout: Timeout in seconds
 
         Returns:
-            聊天响应
+            Chat response
 
         Raises:
-            LLMError: 调用失败时抛出
+            LLMError: Raised on call failure
         """
         pass
 
 
 class OllamaClient(BaseLLMClient):
-    """Ollama LLM 客户端"""
+    """Ollama LLM client"""
 
     def __init__(self, host: str, model: str):
         self.host = host
@@ -64,7 +64,7 @@ class OllamaClient(BaseLLMClient):
         self._client = None
 
     def _get_client(self):
-        """获取 Ollama 客户端实例"""
+        """Get Ollama client instance"""
         if self._client is None:
             import ollama
             self._client = ollama.Client(host=self.host)
@@ -75,7 +75,7 @@ class OllamaClient(BaseLLMClient):
         messages: List[ChatMessage],
         timeout: Optional[int] = None,
     ) -> ChatResponse:
-        """调用 Ollama 聊天接口"""
+        """Call Ollama chat interface"""
         from ollama import RequestError
 
         client = self._get_client()
@@ -90,13 +90,13 @@ class OllamaClient(BaseLLMClient):
             return ChatResponse(content=response["message"]["content"])
 
         except RequestError as e:
-            raise LLMError(f"Ollama 调用失败：{e}")
+            raise LLMError(f"Ollama call failed: {e}")
         except Exception as e:
-            raise LLMError(f"Ollama 调用异常：{e}")
+            raise LLMError(f"Ollama call error: {e}")
 
 
 class OpenAIClient(BaseLLMClient):
-    """OpenAI 格式 LLM 客户端"""
+    """OpenAI-format LLM client"""
 
     def __init__(self, base_url: str, api_key: str, model: str):
         self.base_url = base_url
@@ -105,7 +105,7 @@ class OpenAIClient(BaseLLMClient):
         self._client = None
 
     def _get_client(self):
-        """获取 OpenAI 客户端实例"""
+        """Get OpenAI client instance"""
         if self._client is None:
             from openai import OpenAI
             self._client = OpenAI(
@@ -119,7 +119,7 @@ class OpenAIClient(BaseLLMClient):
         messages: List[ChatMessage],
         timeout: Optional[int] = None,
     ) -> ChatResponse:
-        """调用 OpenAI 格式聊天接口"""
+        """Call OpenAI-format chat interface"""
         from openai import APIError
 
         client = self._get_client()
@@ -134,28 +134,28 @@ class OpenAIClient(BaseLLMClient):
             return ChatResponse(content=response.choices[0].message.content)
 
         except APIError as e:
-            raise LLMError(f"OpenAI API 调用失败：{e}")
+            raise LLMError(f"OpenAI API call failed: {e}")
         except Exception as e:
-            raise LLMError(f"OpenAI API 调用异常：{e}")
+            raise LLMError(f"OpenAI API call error: {e}")
 
 
 class LLMError(Exception):
-    """LLM 调用异常"""
+    """LLM call error"""
     pass
 
 
 def create_llm_client(provider: LLMProvider, config: Dict[str, Any]) -> BaseLLMClient:
-    """创建 LLM 客户端工厂函数
+    """Factory function to create LLM client
 
     Args:
-        provider: LLM 提供商类型
-        config: 配置参数
+        provider: LLM provider type
+        config: Configuration parameters
 
     Returns:
-        LLM 客户端实例
+        LLM client instance
 
     Raises:
-        ValueError: 未知的提供商类型
+        ValueError: Unknown provider type
     """
     if provider == LLMProvider.OLLAMA:
         return OllamaClient(
@@ -169,4 +169,4 @@ def create_llm_client(provider: LLMProvider, config: Dict[str, Any]) -> BaseLLMC
             model=config.get("model", "gpt-3.5-turbo"),
         )
     else:
-        raise ValueError(f"未知的 LLM 提供商：{provider}")
+        raise ValueError(f"Unknown LLM provider: {provider}")

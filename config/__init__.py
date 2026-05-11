@@ -1,4 +1,4 @@
-from . import logging_config  # noqa: F401  # 统一日志配置
+from . import logging_config  # noqa: F401  # Unified logging configuration
 from .settings import settings
 
 __all__ = ["settings"]

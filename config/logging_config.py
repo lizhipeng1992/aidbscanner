@@ -1,4 +1,4 @@
-"""日志配置模块"""
+"""Logging configuration module"""
 import logging
 import sys
 from datetime import datetime
@@ -6,7 +6,7 @@ from typing import Optional
 
 
 class _TimestampFilter(logging.Filter):
-    """为无时间戳的 Record 补充 created 字段"""
+    """Add created timestamp to records without one"""
     def filter(self, record: logging.LogRecord) -> bool:
         if record.created is None or record.created == 0:
             record.created = datetime.now().timestamp()
@@ -14,9 +14,9 @@ class _TimestampFilter(logging.Filter):
 
 
 class _SuppressLibraryFilter(logging.Filter):
-    """抑制第三方库的 INFO 级别日志，避免与进度输出交错"""
+    """Suppress INFO-level logs from third-party libraries to avoid interleaving with progress output"""
     def filter(self, record: logging.LogRecord) -> bool:
-        # 抑制 httpx 的重试日志（Retrying request）
+        # Suppress httpx retry logs (Retrying request)
         if record.name in ("httpx", "httpcore", "urllib3"):
             return False
         return True
@@ -26,17 +26,17 @@ def setup_logging(
     level: Optional[str] = None,
     enable_color: bool = True,
 ) -> None:
-    """统一配置项目日志。
+    """Unified logging configuration for the project.
 
-    格式示例::
+    Example format::
 
-        2026-04-30 14:23:01 [INFO]    core.scanner: 连接 MySQL 成功
-        2026-04-30 14:23:01 [WARNING] core.scanner: 表 test.t1 不存在或无字段
-        2026-04-30 14:23:02 [ERROR]   core.semantic_analyzer: 调用 LLM 失败: timeout
+        2026-04-30 14:23:01 [INFO]    core.scanner: Successfully connected to MySQL
+        2026-04-30 14:23:01 [WARNING] core.scanner: Table test.t1 does not exist or has no columns
+        2026-04-30 14:23:02 [ERROR]   core.semantic_analyzer: LLM call failed: timeout
 
     Args:
-        level: 根日志级别，默认从 settings.log_level 读取，再默认 INFO。
-        enable_color: 是否在终端输出中启用颜色（仅 Linux/macOS 生效）。
+        level: Root log level, defaults to settings.log_level, then INFO.
+        enable_color: Whether to enable color in terminal output (Linux/macOS only).
     """
     root = logging.getLogger()
     if level is None:
@@ -53,9 +53,9 @@ def setup_logging(
 
 
 class _UnifiedFormatter(logging.Formatter):
-    """统一日志格式：时间 | 级别 | 模块 | 消息"""
+    """Unified log format: timestamp | level | module | message"""
 
-    # ANSI 颜色
+    # ANSI colors
     _COLORS = {
         "DEBUG": "\033[36m",      # cyan
         "INFO": "\033[32m",       # green
@@ -73,7 +73,7 @@ class _UnifiedFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         ts = datetime.fromtimestamp(record.created).strftime("%Y-%m-%d %H:%M:%S")
 
-        # 进度消息：使用自定义格式，不显示时间戳和级别
+        # Progress message: use custom format without timestamp and level
         progress_type = getattr(record, "progress_type", None)
         if progress_type:
             msg = record.getMessage()
@@ -82,24 +82,24 @@ class _UnifiedFormatter(logging.Formatter):
                 "step": "  ├─ {msg}",
                 "done": "  └─ {msg}",
                 "finish": "[OK] {msg}",
-                "field_progress": "  字段 {msg}",
+                "field_progress": "  Field {msg}",
                 "table_progress": "  {msg}",
             }.get(progress_type, "{msg}")
             return fmt.format(msg=msg)
 
-        # 级别名称 + 缩进到 10 字符
+        # Level name + indent to 10 characters
         levelname = record.levelname.ljust(8)
 
-        # 模块名截断包路径
+        # Module name: truncate package path
         module = self._short_module(record.module)
 
-        # 消息
+        # Message
         msg = record.getMessage()
 
-        # 组装
+        # Assemble
         parts = [f"{ts}  [{levelname}] {module}: {msg}"]
 
-        # 异常信息
+        # Exception info
         if record.exc_info and record.exc_info[0] is not None:
             parts.append(self.formatException(record.exc_info))
 
@@ -116,11 +116,11 @@ class _UnifiedFormatter(logging.Formatter):
 
     @staticmethod
     def _short_module(module: str) -> str:
-        """将 core.semantic_analyzer 简化为 semantic_analyzer"""
+        """Truncate core.semantic_analyzer to semantic_analyzer"""
         if "." in module:
             return module.split(".")[-1]
         return module
 
 
-# 模块加载时自动配置
+# Auto-configure on module load
 setup_logging()

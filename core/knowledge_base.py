@@ -1,4 +1,4 @@
-"""知识基类，用于管理语义数据的存储和检索"""
+"""Knowledge base for managing semantic data storage and retrieval"""
 import logging
 from typing import List, Optional, Dict, Any
 
@@ -11,18 +11,18 @@ logger = logging.getLogger(__name__)
 
 
 class KnowledgeBase:
-    """知识基，管理语义数据的向量化存储和检索"""
+    """Knowledge base for managing vectorized storage and retrieval of semantic data"""
 
     def __init__(
         self,
         vector_store: Optional[MilvusVectorStore] = None,
         embedding_service: Optional[BaseEmbeddingService] = None,
     ):
-        """初始化知识基
+        """Initialize knowledge base
 
         Args:
-            vector_store: 向量存储实例
-            embedding_service: 嵌入服务实例
+            vector_store: Vector storage instance
+            embedding_service: Embedding service instance
         """
         self.vector_store = vector_store or MilvusVectorStore(
             host=settings.milvus_host,
@@ -31,7 +31,7 @@ class KnowledgeBase:
             vector_dim=settings.milvus_vector_dim,
         )
 
-        # 根据配置创建嵌入服务
+        # Create embedding service based on configuration
         if embedding_service is not None:
             self.embedding_service = embedding_service
         else:
@@ -49,13 +49,13 @@ class KnowledgeBase:
                 )
 
     def connect(self) -> None:
-        """连接到向量数据库"""
+        """Connect to vector database"""
         self.vector_store.connect()
-        # 迁移：删除旧集合
+        # Migration: drop old collection
         if self.vector_store.has_collection("db_semantics"):
             self.vector_store.drop_collection("db_semantics")
-            logger.info("已迁移：删除旧集合 db_semantics")
-        # 创建两个新集合
+            logger.info("Migration: dropped old collection db_semantics")
+        # Create two new collections
         self.vector_store.create_collection(
             collection_name=settings.milvus_table_collection,
             dimension=settings.milvus_vector_dim,
@@ -66,23 +66,23 @@ class KnowledgeBase:
         )
 
     def disconnect(self) -> None:
-        """断开连接"""
+        """Disconnect"""
         self.vector_store.disconnect()
 
     def store_field_semantic(self, field: FieldSemantic) -> None:
-        """存储字段语义信息
+        """Store field semantic information.
 
         Args:
-            field: 字段语义对象
+            field: Field semantic object
         """
         try:
-            # 构造要嵌入的文本
+            # Build text for embedding
             text = self._build_field_text(field)
 
-            # 生成向量
+            # Generate vector
             vector = self.embedding_service.embed_text(text)
 
-            # 准备数据
+            # Prepare data
             data = [
                 {
                     "id": field.id,
@@ -98,26 +98,26 @@ class KnowledgeBase:
                 }
             ]
 
-            # 插入向量数据库
+            # Insert into vector database
             self.vector_store.insert(
                 collection_name=settings.milvus_field_collection,
                 vectors=[vector],
                 data=data,
             )
-            logger.info(f"存储字段语义：{field.id}")
+            logger.info(f"Stored field semantic: {field.id}")
 
         except Exception as e:
-            logger.error(f"存储字段语义失败：{e}")
+            logger.error(f"Failed to store field semantic: {e}")
 
     def store_table_semantic(self, table: TableSemantic) -> None:
-        """存储表语义信息
+        """Store table semantic information.
 
         Args:
-            table: 表语义对象
+            table: Table semantic object
         """
-        # 存储表级语义到 table_semantics
+        # Store table-level semantics to table_semantics
         try:
-            text = f"表：{table.table_name} 中文名称：{table.chinese_name or ''} 定义：{table.business_definition or ''}"
+            text = f"Table: {table.table_name} Chinese Name: {table.chinese_name or ''} Definition: {table.business_definition or ''}"
             vector = self.embedding_service.embed_text(text)
 
             data = [
@@ -140,12 +140,12 @@ class KnowledgeBase:
                 vectors=[vector],
                 data=data,
             )
-            logger.info(f"存储表语义：{table.table_name}")
+            logger.info(f"Stored table semantic: {table.table_name}")
 
         except Exception as e:
-            logger.error(f"存储表语义失败：{e}")
+            logger.error(f"Failed to store table semantic: {e}")
 
-        # 存储字段级别语义
+        # Store field-level semantics
         for field in table.field_semantics:
             self.store_field_semantic(field)
 
@@ -156,22 +156,22 @@ class KnowledgeBase:
         table_name: Optional[str] = None,
         top_k: int = 10,
     ) -> List[Dict[str, Any]]:
-        """搜索相似的字段
+        """Search for similar fields.
 
         Args:
-            query: 查询文本
-            db_name: 数据库名过滤（可选）
-            table_name: 表名过滤（可选）
-            top_k: 返回结果数量
+            query: Query text
+            db_name: Database name filter (optional)
+            table_name: Table name filter (optional)
+            top_k: Number of results to return
 
         Returns:
-            搜索结果列表
+            Search results list
         """
         try:
-            # 生成查询向量
+            # Generate query vector
             query_vector = self.embedding_service.embed_text(query)
 
-            # 构建过滤表达式
+            # Build filter expression
             filter_expr = None
             if db_name:
                 filter_expr = f'db_name == "{db_name}"'
@@ -181,7 +181,7 @@ class KnowledgeBase:
                 else:
                     filter_expr = f'table_name == "{table_name}"'
 
-            # 搜索表集合（优先）
+            # Search table collection (priority)
             table_results = self.vector_store.search(
                 collection_name=settings.milvus_table_collection,
                 query_vector=query_vector,
@@ -189,7 +189,7 @@ class KnowledgeBase:
                 filter_expr=filter_expr,
             )
 
-            # 搜索字段集合
+            # Search field collection
             field_results = self.vector_store.search(
                 collection_name=settings.milvus_field_collection,
                 query_vector=query_vector,
@@ -197,7 +197,7 @@ class KnowledgeBase:
                 filter_expr=filter_expr,
             )
 
-            # 合并：表结果在前，按 id 去重
+            # Merge: table results first, deduplicate by id
             all_results = table_results + field_results
             seen_ids = set()
             merged = []
@@ -211,20 +211,20 @@ class KnowledgeBase:
             return results
 
         except Exception as e:
-            logger.error(f"搜索相似字段失败：{e}")
+            logger.error(f"Failed to search similar fields: {e}")
             return []
 
     def get_fields_by_table(
         self, db_name: str, table_name: str
     ) -> List[Dict[str, Any]]:
-        """获取指定表的所有字段语义
+        """Get all field semantics for a specified table.
 
         Args:
-            db_name: 数据库名
-            table_name: 表名
+            db_name: Database name
+            table_name: Table name
 
         Returns:
-            字段语义列表
+            Field semantics list
         """
         try:
             filter_expr = f'db_name == "{db_name}" and table_name == "{table_name}"'
@@ -236,32 +236,32 @@ class KnowledgeBase:
             )
             return results
         except Exception as e:
-            logger.error(f"获取表字段失败：{e}")
+            logger.error(f"Failed to get table fields: {e}")
             return []
 
     def _build_field_text(self, field: FieldSemantic) -> str:
-        """构建字段嵌入文本
+        """Build text for field embedding.
 
         Args:
-            field: 字段语义对象
+            field: Field semantic object
 
         Returns:
-            用于嵌入的文本
+            Text for embedding
         """
         parts = [
-            f"字段：{field.column_name}",
-            f"表：{field.table_name}",
-            f"类型：{field.data_type}",
+            f"Field: {field.column_name}",
+            f"Table: {field.table_name}",
+            f"Type: {field.data_type}",
         ]
 
         if field.chinese_name:
-            parts.append(f"中文名称：{field.chinese_name}")
+            parts.append(f"Chinese Name: {field.chinese_name}")
         if field.business_definition:
-            parts.append(f"业务定义：{field.business_definition}")
+            parts.append(f"Business Definition: {field.business_definition}")
         if field.value_rules:
-            parts.append(f"取值规则：{field.value_rules}")
+            parts.append(f"Value Rules: {field.value_rules}")
         if field.data_category:
-            parts.append(f"数据分类：{field.data_category.value}")
+            parts.append(f"Data Category: {field.data_category.value}")
 
         return " ".join(parts)
 

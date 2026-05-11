@@ -1,4 +1,4 @@
-"""MySQL 数据库元数据扫描器"""
+"""MySQL database metadata scanner"""
 import logging
 from typing import List, Optional, Any, Dict
 import mysql.connector
@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 class MySQLScanner:
-    """MySQL 数据库元数据扫描器"""
+    """MySQL database metadata scanner"""
 
     def __init__(
         self,
@@ -20,13 +20,13 @@ class MySQLScanner:
         user: Optional[str] = None,
         password: Optional[str] = None,
     ):
-        """初始化扫描器
+        """Initialize scanner.
 
         Args:
-            host: MySQL 主机地址
-            port: MySQL 端口
-            user: 用户名
-            password: 密码
+            host: MySQL host address
+            port: MySQL port
+            user: Username
+            password: Password
         """
         self.host = host or settings.mysql_host
         self.port = port or settings.mysql_port
@@ -35,7 +35,7 @@ class MySQLScanner:
         self._connection = None
 
     def _get_connection(self, database: str):
-        """获取数据库连接"""
+        """Get database connection"""
         if self._connection is None or not self._connection.is_connected():
             try:
                 self._connection = mysql.connector.connect(
@@ -47,12 +47,12 @@ class MySQLScanner:
                     autocommit=True,
                 )
             except Error as e:
-                logger.error(f"连接 MySQL 失败：{e}")
+                logger.error(f"Failed to connect to MySQL: {e}")
                 raise
         return self._connection
 
     def close(self):
-        """关闭连接"""
+        """Close connection"""
         if self._connection and self._connection.is_connected():
             self._connection.close()
 
@@ -63,8 +63,8 @@ class MySQLScanner:
         self.close()
 
     def list_databases(self) -> List[str]:
-        """列出所有数据库"""
-        # 先不指定 database 参数连接
+        """List all databases"""
+        # Connect without specifying a database parameter
         conn = mysql.connector.connect(
             host=self.host,
             port=self.port,
@@ -82,27 +82,27 @@ class MySQLScanner:
 
     @staticmethod
     def _is_data_type_compatible(type1: str, type2: str) -> bool:
-        """检查两个 MySQL 数据类型是否兼容（可用于外键关联）
+        """Check if two MySQL data types are compatible (for foreign key relationships).
 
         Args:
-            type1: 第一个列的数据类型
-            type2: 第二个列的数据类型
+            type1: First column data type
+            type2: Second column data type
 
         Returns:
-            是否兼容
+            Whether compatible
         """
         if not type1 or not type2:
             return False
 
-        # 规范化类型：去除长度、精度等修饰
+        # Normalize type: remove length, precision, etc.
         base1 = type1.strip().lower().split("(")[0].split("[")[0]
         base2 = type2.strip().lower().split("(")[0].split("[")[0]
 
-        # 完全匹配
+        # Exact match
         if base1 == base2:
             return True
 
-        # 数值类型兼容组
+        # Numeric type compatibility groups
         numeric_groups = [
             {"tinyint", "smallint", "mediumint", "int", "bigint"},
         ]
@@ -111,7 +111,7 @@ class MySQLScanner:
             if base1 in group and base2 in group:
                 return True
 
-        # 字符串类型兼容组
+        # String type compatibility groups
         string_groups = [
             {"char", "varchar", "text", "tinytext", "mediumtext", "longtext"},
         ]
@@ -123,19 +123,19 @@ class MySQLScanner:
         return False
 
     def scan_database(self, db_name: str) -> List[TableMetadata]:
-        """扫描指定数据库的所有表结构
+        """Scan all table structures in the specified database.
 
         Args:
-            db_name: 数据库名称
+            db_name: Database name
 
         Returns:
-            表元数据列表
+            Table metadata list
         """
         try:
             conn = self._get_connection(db_name)
             cursor = conn.cursor(dictionary=True)
 
-            # 获取所有表
+            # Get all tables
             cursor.execute("SHOW TABLES")
             tables = [row[f"Tables_in_{db_name}"] for row in cursor.fetchall()]
 
@@ -145,24 +145,24 @@ class MySQLScanner:
                 result.append(table_meta)
 
             cursor.close()
-            logger.info(f"扫描完成：数据库 {db_name} 共 {len(result)} 张表")
+            logger.info(f"Scan complete: database {db_name} has {len(result)} tables")
             return result
 
         except Error as e:
-            logger.error(f"扫描数据库 {db_name} 失败：{e}")
+            logger.error(f"Failed to scan database {db_name}: {e}")
             return []
 
     def scan_table_only(
         self, db_name: str, table_name: str
     ) -> Optional[TableMetadata]:
-        """仅扫描指定表的元数据（不扫描全库）
+        """Scan metadata for a single table (without scanning the full database).
 
         Args:
-            db_name: 数据库名
-            table_name: 表名
+            db_name: Database name
+            table_name: Table name
 
         Returns:
-            表元数据，不存在则返回 None
+            Table metadata, or None if the table does not exist
         """
         try:
             conn = self._get_connection(db_name)
@@ -172,28 +172,28 @@ class MySQLScanner:
             cursor.close()
 
             if not table_meta.columns:
-                logger.warning(f"表 {db_name}.{table_name} 不存在或无字段")
+                logger.warning(f"Table {db_name}.{table_name} does not exist or has no columns")
                 return None
 
             return table_meta
 
         except Error as e:
-            logger.error(f"扫描表 {db_name}.{table_name} 失败：{e}")
+            logger.error(f"Failed to scan table {db_name}.{table_name}: {e}")
             return None
 
     def get_sample_data_batch(
         self, db_name: str, table_name: str, column_names: List[str], limit: int = 5
     ) -> Dict[str, List[Any]]:
-        """批量获取多个字段的示例数据（单次查询）
+        """Batch fetch sample data for multiple columns in a single query.
 
         Args:
-            db_name: 数据库名
-            table_name: 表名
-            column_names: 字段名列表
-            limit: 每个字段返回的示例数据条数
+            db_name: Database name
+            table_name: Table name
+            column_names: Column name list
+            limit: Number of sample rows per column
 
         Returns:
-            {column_name: [sample_values]} 字典
+            {column_name: [sample_values]} dictionary
         """
         if not column_names:
             return {}
@@ -202,7 +202,7 @@ class MySQLScanner:
             conn = self._get_connection(db_name)
             cursor = conn.cursor()
 
-            # 单次查询获取所有列的示例数据
+            # Single query to get sample data for all columns
             cols = ", ".join(f"`{c}`" for c in column_names)
             query = f"SELECT {cols} FROM `{table_name}` WHERE {f' AND '.join(f'`{c}` IS NOT NULL' for c in column_names)} LIMIT %s"
             cursor.execute(query, (limit,))
@@ -210,7 +210,7 @@ class MySQLScanner:
 
             cursor.close()
 
-            # 按列组织结果
+            # Organize results by column
             result: Dict[str, List[Any]] = {col: [] for col in column_names}
             seen: Dict[str, set] = {col: set() for col in column_names}
 
@@ -229,14 +229,14 @@ class MySQLScanner:
             return result
 
         except Error as e:
-            logger.error(f"批量获取示例数据失败：{e}")
+            logger.error(f"Failed to batch fetch sample data: {e}")
             return {col: [] for col in column_names}
 
     def _get_table_metadata(
         self, cursor, table_name: str, db_name: str
     ) -> TableMetadata:
-        """获取单个表的元数据"""
-        # 获取表信息
+        """Get metadata for a single table."""
+        # Get table info
         cursor.execute(f"SHOW TABLE STATUS LIKE '{table_name}'")
         table_info = cursor.fetchone()
 
@@ -246,7 +246,7 @@ class MySQLScanner:
             engine=table_info.get("Engine", "InnoDB") if table_info else "InnoDB",
         )
 
-        # 获取字段信息
+        # Get column info
         columns = self._get_columns_metadata(cursor, table_name, db_name)
         table_meta.columns = columns
 
@@ -255,11 +255,11 @@ class MySQLScanner:
     def _get_columns_metadata(
         self, cursor, table_name: str, db_name: str
     ) -> List[ColumnMetadata]:
-        """获取表的所有字段元数据"""
+        """Get metadata for all columns in a table."""
         cursor.execute(f"SHOW FULL COLUMNS FROM `{table_name}`")
         columns_info = cursor.fetchall()
 
-        # 获取主键信息
+        # Get primary key info
         cursor.execute(
             f"""
             SELECT COLUMN_NAME
@@ -271,7 +271,7 @@ class MySQLScanner:
         )
         primary_keys = {row["COLUMN_NAME"] for row in cursor.fetchall()}
 
-        # 获取自增字段（从 COLUMNS 表查询，EXTRA 字段在 COLUMNS 表中）
+        # Get auto-increment columns (from COLUMNS table, EXTRA column)
         cursor.execute(
             f"""
             SELECT COLUMN_NAME
@@ -297,20 +297,20 @@ class MySQLScanner:
                 is_auto_increment=col_info["Field"] in auto_increment_cols,
                 ordinal_position=int(col_info["Key"]) if col_info["Key"].isdigit() else 0,
             )
-            # 修正 ordinal_position
+            # Fix ordinal_position
             col.ordinal_position = int(col_info["Key"]) if col_info.get("Key") and str(col_info["Key"]).isdigit() else 0
             columns.append(col)
 
-        # 按 ordinal_position 排序
+        # Sort by ordinal_position
         columns.sort(key=lambda x: x.ordinal_position)
 
         return columns
 
     def _get_char_length(self, data_type: str) -> Optional[int]:
-        """从数据类型中提取字符长度"""
+        """Extract character length from data type string."""
         import re
 
-        # 匹配 VARCHAR(n), CHAR(n) 等
+        # Match VARCHAR(n), CHAR(n), etc.
         match = re.search(r"\((\d+)\)", data_type)
         if match:
             return int(match.group(1))
@@ -319,22 +319,22 @@ class MySQLScanner:
     def get_sample_data(
         self, db_name: str, table_name: str, column_name: str, limit: int = 5
     ) -> List[Any]:
-        """获取字段的示例数据
+        """Get sample data for a column.
 
         Args:
-            db_name: 数据库名
-            table_name: 表名
-            column_name: 字段名
-            limit: 返回条数
+            db_name: Database name
+            table_name: Table name
+            column_name: Column name
+            limit: Number of rows to return
 
         Returns:
-            示例数据列表
+            Sample data list
         """
         try:
             conn = self._get_connection(db_name)
             cursor = conn.cursor()
 
-            # 使用参数化查询防止 SQL 注入
+            # Use parameterized queries to prevent SQL injection
             query = f"""
                 SELECT `{column_name}`
                 FROM `{table_name}`
@@ -344,7 +344,7 @@ class MySQLScanner:
             cursor.execute(query, (limit,))
             results = cursor.fetchall()
 
-            # 提取非空值并去重
+            # Extract non-null values and deduplicate
             sample_values = []
             for row in results:
                 if row[0] is not None and str(row[0]) not in [str(v) for v in sample_values]:
@@ -356,47 +356,47 @@ class MySQLScanner:
             return sample_values
 
         except Error as e:
-            logger.error(f"获取示例数据失败：{e}")
+            logger.error(f"Failed to fetch sample data: {e}")
             return []
 
     def discover_foreign_key_candidates(
         self, tables: List[TableMetadata]
     ) -> List[Relationship]:
-        """基于命名规则发现潜在的外键关系
+        """Discover potential foreign keys based on naming conventions.
 
         Args:
-            tables: 表元数据列表
+            tables: Table metadata list
 
         Returns:
-            潜在外键关系列表
+            Potential foreign key relationships list
         """
         candidates = []
 
-        # 构建字段索引
+        # Build column index
         table_columns = {}
         for table in tables:
             table_columns[table.table_name] = {col.column_name: col for col in table.columns}
 
-        # 查找 _id 结尾的字段
+        # Find columns ending with _id
         for table in tables:
             for col in table.columns:
                 if col.column_name.endswith("_id"):
-                    # 尝试找到对应的表
-                    base_name = col.column_name[:-3]  # 去掉 _id 后缀
+                    # Try to find the corresponding table
+                    base_name = col.column_name[:-3]  # Strip _id suffix
 
-                    # 可能的目标表名（单数/复数形式）
+                    # Possible target table names (singular/plural forms)
                     possible_targets = [base_name, f"{base_name}s", f"{base_name}es"]
 
                     for target_table_name in possible_targets:
                         if target_table_name in table_columns and target_table_name != table.table_name:
-                            # 简化处理：假设目标表的主键是 table_name_id 或 id
+                            # Simplified: assume target table primary key is table_name_id or id
                             possible_pk = [target_table_name + "_id", "id"]
 
                             for pk in possible_pk:
                                 if pk in table_columns[target_table_name]:
                                     target_col = table_columns[target_table_name][pk]
 
-                                    # 检查数据类型是否兼容
+                                    # Check if data types are compatible
                                     type_compatible = self._is_data_type_compatible(col.data_type, target_col.data_type)
 
                                     rel = Relationship(
@@ -406,7 +406,7 @@ class MySQLScanner:
                                         target_column=pk,
                                         relationship_type="many-to-one",
                                         match_rate=0.0,
-                                        confidence_score=0.7 if type_compatible else 0.5,  # 命名规则基础分
+                                        confidence_score=0.7 if type_compatible else 0.5,  # Naming pattern base score
                                         verified=False,
                                         discovery_methods=[RelationshipDiscoveryMethod.NAMING_PATTERN],
                                         data_type_match=type_compatible,
@@ -420,20 +420,20 @@ class MySQLScanner:
     def calculate_match_rate(
         self, db_name: str, rel: Relationship
     ) -> float:
-        """计算外键匹配率
+        """Calculate foreign key match rate.
 
         Args:
-            db_name: 数据库名
-            rel: 关系对象
+            db_name: Database name
+            rel: Relationship object
 
         Returns:
-            匹配率 (0-1)
+            Match rate (0-1)
         """
         try:
             conn = self._get_connection(db_name)
             cursor = conn.cursor()
 
-            # 获取源字段的值
+            # Get source column distinct values count
             cursor.execute(
                 f"""
                 SELECT COUNT(DISTINCT `{rel.source_column}`) as src_count
@@ -445,7 +445,7 @@ class MySQLScanner:
             if src_count == 0:
                 return 0.0
 
-            # 获取匹配的值的数量
+            # Get count of matching values
             cursor.execute(
                 f"""
                 SELECT COUNT(DISTINCT s.`{rel.source_column}`) as match_count
@@ -461,5 +461,5 @@ class MySQLScanner:
             return match_count / src_count if src_count > 0 else 0.0
 
         except Error as e:
-            logger.error(f"计算匹配率失败：{e}")
+            logger.error(f"Failed to calculate match rate: {e}")
             return 0.0

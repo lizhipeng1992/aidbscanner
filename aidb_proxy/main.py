@@ -1,4 +1,4 @@
-"""AI Database Proxy - FastAPI 应用"""
+"""AI Database Proxy - FastAPI Application"""
 import logging
 from typing import List, Optional, Dict
 from contextlib import asynccontextmanager
@@ -46,15 +46,15 @@ chroma_store = ChromaStore(settings.semantic_storage_path)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """应用生命周期管理"""
-    logger.info("AI Database Proxy 启动")
+    """Application lifecycle management"""
+    logger.info("AI Database Proxy starting")
     yield
-    logger.info("AI Database Proxy 关闭")
+    logger.info("AI Database Proxy stopping")
 
 
 app = FastAPI(
     title="AI Database Proxy",
-    description="AI 数据库语义层 API 服务",
+    description="AI Database Semantic Layer API Service",
     version="1.0.0",
     lifespan=lifespan,
 )
@@ -72,7 +72,7 @@ def get_analyzer(scanner: Optional[MySQLScanner] = None) -> SemanticAnalyzer:
 
 @app.get("/health", response_model=HealthResponse)
 async def health_check():
-    """健康检查"""
+    """Health check"""
     from core.llm_client import LLMProvider, create_llm_client, ChatMessage
 
     mysql_status = "unknown"
@@ -113,7 +113,7 @@ async def health_check():
 
 @app.get("/databases", response_model=DatabaseListResponse)
 async def list_databases():
-    """列出所有数据库"""
+    """List all databases"""
     try:
         scanner = get_scanner()
         databases = scanner.list_databases()
@@ -121,19 +121,19 @@ async def list_databases():
         databases = [db for db in databases if db not in system_dbs]
         return DatabaseListResponse(databases=databases)
     except Exception as e:
-        logger.error(f"获取数据库列表失败：{e}")
+        logger.error(f"Failed to get database list: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/databases/{db_name}/tables", response_model=TableListResponse)
 async def list_tables(db_name: str):
-    """列出指定数据库的所有表"""
+    """List all tables in a specified database"""
     try:
         scanner = get_scanner()
         tables = scanner.scan_database(db_name)
 
         if not tables:
-            raise HTTPException(status_code=404, detail=f"数据库不存在：{db_name}")
+            raise HTTPException(status_code=404, detail=f"Database does not exist: {db_name}")
 
         table_metadata_list = [
             TableMetadataResponse(
@@ -149,28 +149,28 @@ async def list_tables(db_name: str):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"获取表列表失败：{e}")
+        logger.error(f"Failed to get table list: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/fields/analyze", response_model=FieldSemanticResponse)
 async def analyze_field(request: FieldSemanticRequest):
-    """分析单个字段的语义"""
+    """Analyze semantics of a single field"""
     try:
         scanner = get_scanner()
         analyzer = get_analyzer(scanner)
 
         tables = scanner.scan_database(request.db_name)
         if not tables:
-            raise HTTPException(status_code=404, detail=f"数据库不存在：{request.db_name}")
+            raise HTTPException(status_code=404, detail=f"Database does not exist: {request.db_name}")
 
         target_table = next((t for t in tables if t.table_name == request.table_name), None)
         if not target_table:
-            raise HTTPException(status_code=404, detail=f"表不存在：{request.table_name}")
+            raise HTTPException(status_code=404, detail=f"Table does not exist: {request.table_name}")
 
         target_column = next((c for c in target_table.columns if c.column_name == request.column_name), None)
         if not target_column:
-            raise HTTPException(status_code=404, detail=f"字段不存在：{request.column_name}")
+            raise HTTPException(status_code=404, detail=f"Field does not exist: {request.column_name}")
 
         sample_values = scanner.get_sample_data(
             request.db_name, request.table_name, request.column_name
@@ -196,24 +196,24 @@ async def analyze_field(request: FieldSemanticRequest):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"分析字段语义失败：{e}")
+        logger.error(f"Failed to analyze field semantics: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/tables/analyze", response_model=TableSemanticResponse)
 async def analyze_table(request: TableSemanticRequest):
-    """分析整张表的语义"""
+    """Analyze the semantics of an entire table"""
     try:
         scanner = get_scanner()
         analyzer = get_analyzer(scanner)
 
         tables = scanner.scan_database(request.db_name)
         if not tables:
-            raise HTTPException(status_code=404, detail=f"数据库不存在：{request.db_name}")
+            raise HTTPException(status_code=404, detail=f"Database does not exist: {request.db_name}")
 
         target_table = next((t for t in tables if t.table_name == request.table_name), None)
         if not target_table:
-            raise HTTPException(status_code=404, detail=f"表不存在：{request.table_name}")
+            raise HTTPException(status_code=404, detail=f"Table does not exist: {request.table_name}")
 
         table_semantic = analyzer.analyze_table(target_table, request.db_name, request.sample_size)
 
@@ -243,13 +243,13 @@ async def analyze_table(request: TableSemanticRequest):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"分析表语义失败：{e}")
+        logger.error(f"Failed to analyze table semantics: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/relationships/verify", response_model=RelationshipResponse)
 async def verify_relationship(request: RelationshipVerifyRequest):
-    """验证表间关系"""
+    """Verify relationships between tables"""
     try:
         scanner = get_scanner()
         analyzer = get_analyzer(scanner)
@@ -282,20 +282,20 @@ async def verify_relationship(request: RelationshipVerifyRequest):
             verified=rel.verified,
         )
     except Exception as e:
-        logger.error(f"验证关系失败：{e}")
+        logger.error(f"Failed to verify relationship: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/discover/relationships", response_model=List[RelationshipResponse])
-async def discover_relationships(db_name: str = Query(..., description="数据库名称")):
-    """发现潜在的外键关系"""
+async def discover_relationships(db_name: str = Query(..., description="Database name")):
+    """Discover potential foreign key relationships"""
     try:
         scanner = get_scanner()
         analyzer = get_analyzer(scanner)
 
         tables = scanner.scan_database(db_name)
         if not tables:
-            raise HTTPException(status_code=404, detail=f"数据库不存在：{db_name}")
+            raise HTTPException(status_code=404, detail=f"Database does not exist: {db_name}")
 
         candidates = scanner.discover_foreign_key_candidates(tables)
 
@@ -323,20 +323,20 @@ async def discover_relationships(db_name: str = Query(..., description="数据�
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"发现关系失败：{e}")
+        logger.error(f"Failed to discover relationships: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/scan", response_model=ScanProgressResponse)
 async def full_scan(request: ScanRequest):
-    """全量扫描数据库"""
+    """Full scan of database"""
     try:
         scanner = get_scanner()
         analyzer = get_analyzer(scanner)
 
         tables = scanner.scan_database(request.db_name)
         if not tables:
-            raise HTTPException(status_code=404, detail=f"数据库不存在：{request.db_name}")
+            raise HTTPException(status_code=404, detail=f"Database does not exist: {request.db_name}")
 
         table_semantics = analyzer.batch_analyze_tables(tables, request.db_name, request.sample_size)
 
@@ -390,15 +390,15 @@ async def full_scan(request: ScanRequest):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"全量扫描失败：{e}")
+        logger.error(f"Full scan failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 def _parse_field_id(field_id: str) -> tuple[str, str, str]:
-    """解析 field_id (格式：db.table.column)"""
+    """Parse field_id (format: db.table.column)"""
     parts = field_id.split(".")
     if len(parts) < 3:
-        raise ValueError(f"无效的 field_id 格式：{field_id}，应为 db.table.column")
+        raise ValueError(f"Invalid field_id format: {field_id}, expected db.table.column")
     db_name = parts[0]
     table_name = parts[1]
     column_name = ".".join(parts[2:])
@@ -406,8 +406,8 @@ def _parse_field_id(field_id: str) -> tuple[str, str, str]:
 
 
 @app.get("/review/pending", response_model=ReviewPendingResponse)
-async def get_pending_reviews(db_name: Optional[str] = Query(None, description="可选的数据库名过滤")):
-    """获取待审核字段列表"""
+async def get_pending_reviews(db_name: Optional[str] = Query(None, description="Optional database name filter")):
+    """Get pending field review list"""
     pending_data = chroma_store.get_pending_fields(db_name)
 
     pending_fields = [
@@ -435,7 +435,7 @@ async def get_pending_reviews(db_name: Optional[str] = Query(None, description="
 
 @app.post("/review/submit", response_model=ReviewResultResponse)
 async def submit_review(request: ReviewSubmitRequest):
-    """提交审核（确认字段语义）"""
+    """Submit review (confirm field semantics)"""
     try:
         success = chroma_store.submit_field(request.field_id, request.calibrated_by, request.modifications)
 
@@ -444,14 +444,14 @@ async def submit_review(request: ReviewSubmitRequest):
                 success=True,
                 field_id=request.field_id,
                 status=ColumnType.CALIBRATED,
-                message="审核通过",
+                message="Review passed",
             )
         else:
             return ReviewResultResponse(
                 success=False,
                 field_id=request.field_id,
                 status=ColumnType.PENDING,
-                message="字段不存在或不是待审核状态",
+                message="Field does not exist or is not in pending review status",
             )
     except Exception as e:
         return ReviewResultResponse(
@@ -464,7 +464,7 @@ async def submit_review(request: ReviewSubmitRequest):
 
 @app.post("/review/reject", response_model=ReviewResultResponse)
 async def reject_review(request: ReviewRejectRequest):
-    """拒绝字段（标记为跳过）"""
+    """Reject field (mark as skipped)"""
     try:
         success = chroma_store.reject_field(request.field_id)
 
@@ -473,14 +473,14 @@ async def reject_review(request: ReviewRejectRequest):
                 success=True,
                 field_id=request.field_id,
                 status=ColumnType.SKIPPED,
-                message=request.reason or "已拒绝",
+                message=request.reason or "Rejected",
             )
         else:
             return ReviewResultResponse(
                 success=False,
                 field_id=request.field_id,
                 status=ColumnType.PENDING,
-                message="字段不存在或不是待审核状态",
+                message="Field does not exist or is not in pending review status",
             )
     except Exception as e:
         return ReviewResultResponse(
@@ -493,7 +493,7 @@ async def reject_review(request: ReviewRejectRequest):
 
 @app.post("/review/modify", response_model=ReviewResultResponse)
 async def modify_and_confirm(request: ReviewModifyRequest):
-    """修改并确认字段语义"""
+    """Modify and confirm field semantics"""
     try:
         success = chroma_store.modify_field(request.field_id, request.modifications, request.calibrated_by)
 
@@ -502,14 +502,14 @@ async def modify_and_confirm(request: ReviewModifyRequest):
                 success=True,
                 field_id=request.field_id,
                 status=ColumnType.CALIBRATED,
-                message="修改并确认成功",
+                message="Modified and confirmed successfully",
             )
         else:
             return ReviewResultResponse(
                 success=False,
                 field_id=request.field_id,
                 status=ColumnType.PENDING,
-                message="字段不存在或不是待审核状态",
+                message="Field does not exist or is not in pending review status",
             )
     except Exception as e:
         return ReviewResultResponse(
@@ -520,12 +520,12 @@ async def modify_and_confirm(request: ReviewModifyRequest):
         )
 
 
-# ==================== 自然语言查询 API ====================
+# ==================== Natural Language Query API ====================
 
 
 @app.post("/query", response_model=QueryResponse)
 async def natural_language_query(request: QueryRequest):
-    """自然语言查询数据库语义"""
+    """Query database semantics with natural language"""
     try:
         from core.query_engine import QueryEngine
 
@@ -564,15 +564,15 @@ async def natural_language_query(request: QueryRequest):
             error_message=result.error_message,
         )
     except Exception as e:
-        logger.error(f"自然语言查询失败：{e}")
+        logger.error(f"Natural language query failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ==================== 语义缓存相关 API ====================
+# ==================== Semantic Cache API ====================
 
 
 def _get_empty_field_cache(db_name: str, table_name: str, column_name: str, data_type: str = "") -> FieldSemanticCacheResponse:
-    """返回空的字段语义缓存响应"""
+    """Return empty field semantic cache response"""
     return FieldSemanticCacheResponse(
         id=f"{db_name}.{table_name}.{column_name}",
         db_name=db_name,
@@ -584,7 +584,7 @@ def _get_empty_field_cache(db_name: str, table_name: str, column_name: str, data
 
 
 def _get_empty_table_cache(db_name: str, table_name: str) -> TableSemanticCacheResponse:
-    """返回空的表语义缓存响应"""
+    """Return empty table semantic cache response"""
     return TableSemanticCacheResponse(
         id=f"{db_name}.{table_name}",
         db_name=db_name,
@@ -595,7 +595,7 @@ def _get_empty_table_cache(db_name: str, table_name: str) -> TableSemanticCacheR
 
 @app.get("/databases/{db_name}/tables/{table_name}/semantic", response_model=TableSemanticCacheResponse)
 async def get_table_semantic_cache(db_name: str, table_name: str):
-    """获取表级语义信息（从 ChromaDB）"""
+    """Get table-level semantic info (from ChromaDB)"""
     try:
         result = chroma_store.get_table_semantic(db_name, table_name)
 
@@ -632,18 +632,18 @@ async def get_table_semantic_cache(db_name: str, table_name: str):
             fields=fields if fields else None,
         )
     except Exception as e:
-        logger.error(f"获取表语义缓存失败：{e}")
+        logger.error(f"Failed to get table semantic cache: {e}")
         return _get_empty_table_cache(db_name, table_name)
 
 
 @app.get("/databases/{db_name}/tables/{table_name}/field/{column_name}/semantic", response_model=FieldSemanticCacheResponse)
 async def get_field_semantic_cache(db_name: str, table_name: str, column_name: str):
-    """获取字段级语义信息（从 ChromaDB）"""
+    """Get field-level semantic info (from ChromaDB)"""
     try:
         result = chroma_store.get_table_semantic(db_name, table_name)
 
         if not result:
-            # 需要先获取字段的数据类型
+            # Need to get field data type
             scanner = get_scanner()
             tables = scanner.scan_database(db_name)
             data_type = ""
@@ -674,7 +674,7 @@ async def get_field_semantic_cache(db_name: str, table_name: str, column_name: s
                     has_semantics=True,
                 )
 
-        # 字段不在语义缓存中
+        # Field not in semantic cache
         scanner = get_scanner()
         tables = scanner.scan_database(db_name)
         data_type = ""
@@ -688,5 +688,5 @@ async def get_field_semantic_cache(db_name: str, table_name: str, column_name: s
                     break
         return _get_empty_field_cache(db_name, table_name, column_name, data_type)
     except Exception as e:
-        logger.error(f"获取字段语义缓存失败：{e}")
+        logger.error(f"Failed to get field semantic cache: {e}")
         return _get_empty_field_cache(db_name, table_name, column_name)

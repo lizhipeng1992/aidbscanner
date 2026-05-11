@@ -1,4 +1,4 @@
-"""FastAPI 应用层单元测试"""
+"""FastAPI application layer unit tests"""
 import pytest
 from unittest.mock import Mock, patch, MagicMock
 from fastapi.testclient import TestClient
@@ -9,15 +9,15 @@ from core.models import DataCategory, ColumnType
 
 @pytest.fixture
 def client():
-    """创建测试客户端"""
+    """Create test client"""
     return TestClient(app)
 
 
 class TestHealthEndpoint:
-    """健康检查端点测试"""
+    """Health check endpoint tests"""
 
     def test_health_success(self, client):
-        """测试健康检查成功"""
+        """Test health check success"""
         with patch("core.scanner.mysql.connector.connect"):
             with patch("ollama.Client"):
                 response = client.get("/health")
@@ -26,22 +26,22 @@ class TestHealthEndpoint:
         data = response.json()
         assert "status" in data
         assert "mysql" in data
-        assert "llm" in data  # LLM 连接状态
+        assert "llm" in data  # LLM connection status
 
 
 class TestDatabasesEndpoint:
-    """数据库列表端点测试"""
+    """Database list endpoint tests"""
 
     @patch("core.scanner.MySQLScanner.list_databases")
     def test_list_databases_success(self, mock_list_dbs, client):
-        """测试列出数据库成功"""
+        """Test listing databases success"""
         mock_list_dbs.return_value = ["test_db", "prod_db", "mysql", "information_schema"]
 
         response = client.get("/databases")
 
         assert response.status_code == 200
         data = response.json()
-        # 系统数据库应该被过滤
+        # System databases should be filtered
         assert "mysql" not in data["databases"]
         assert "information_schema" not in data["databases"]
         assert "test_db" in data["databases"]
@@ -49,7 +49,7 @@ class TestDatabasesEndpoint:
 
     @patch("core.scanner.MySQLScanner.list_databases")
     def test_list_databases_error(self, mock_list_dbs, client):
-        """测试列出数据库失败"""
+        """Test listing databases failure"""
         from mysql.connector import Error as MySQLError
         mock_list_dbs.side_effect = MySQLError("Connection failed")
 
@@ -59,11 +59,11 @@ class TestDatabasesEndpoint:
 
 
 class TestTablesEndpoint:
-    """表列表端点测试"""
+    """Table list endpoint tests"""
 
     @patch("core.scanner.MySQLScanner.scan_database")
     def test_list_tables_success(self, mock_scan, client):
-        """测试列出表成功"""
+        """Test listing tables success"""
         from core.models import TableMetadata, ColumnMetadata
 
         mock_scan.return_value = [
@@ -93,7 +93,7 @@ class TestTablesEndpoint:
 
     @patch("core.scanner.MySQLScanner.scan_database")
     def test_list_tables_not_found(self, mock_scan, client):
-        """测试数据库不存在"""
+        """Test database not found"""
         mock_scan.return_value = []
 
         response = client.get("/databases/nonexistent/tables")
@@ -102,13 +102,13 @@ class TestTablesEndpoint:
 
 
 class TestFieldAnalyzeEndpoint:
-    """字段分析端点测试"""
+    """Field analysis endpoint tests"""
 
     @patch("core.semantic_analyzer.SemanticAnalyzer.analyze_field")
     @patch("core.scanner.MySQLScanner.get_sample_data")
     @patch("core.scanner.MySQLScanner.scan_database")
     def test_analyze_field_success(self, mock_scan, mock_samples, mock_analyze, client):
-        """测试字段分析成功"""
+        """Test field analysis success"""
         from core.models import TableMetadata, ColumnMetadata, FieldSemantic
 
         mock_scan.return_value = [
@@ -155,7 +155,7 @@ class TestFieldAnalyzeEndpoint:
 
     @patch("core.scanner.MySQLScanner.scan_database")
     def test_analyze_field_not_found(self, mock_scan, client):
-        """测试字段不存在"""
+        """Test field not found"""
         mock_scan.return_value = []
 
         response = client.post("/fields/analyze", json={
@@ -168,12 +168,12 @@ class TestFieldAnalyzeEndpoint:
 
 
 class TestTableAnalyzeEndpoint:
-    """表分析端点测试"""
+    """Table analyze endpoint tests"""
 
     @patch("core.semantic_analyzer.SemanticAnalyzer.analyze_table")
     @patch("core.scanner.MySQLScanner.scan_database")
     def test_analyze_table_success(self, mock_scan, mock_analyze, client):
-        """测试表分析成功"""
+        """Test table analysis success"""
         from core.models import TableMetadata, ColumnMetadata, TableSemantic, FieldSemantic
 
         mock_scan.return_value = [
@@ -228,13 +228,13 @@ class TestTableAnalyzeEndpoint:
 
 
 class TestRelationshipEndpoints:
-    """关系端点测试"""
+    """Relationship endpoint tests"""
 
     @patch("core.semantic_analyzer.SemanticAnalyzer.verify_relationship")
     @patch("core.scanner.MySQLScanner.calculate_match_rate")
     @patch("core.scanner.MySQLScanner.scan_database")
     def test_verify_relationship_success(self, mock_scan, mock_calc, mock_verify, client):
-        """测试关系验证成功"""
+        """Test relationship verification success"""
         from core.models import TableMetadata
 
         mock_scan.return_value = [TableMetadata(table_name="test", table_comment=None, engine="InnoDB", columns=[])]
@@ -259,7 +259,7 @@ class TestRelationshipEndpoints:
     @patch("core.scanner.MySQLScanner.discover_foreign_key_candidates")
     @patch("core.scanner.MySQLScanner.scan_database")
     def test_discover_relationships_success(self, mock_scan, mock_discover, mock_calc, mock_verify, client):
-        """测试发现关系成功"""
+        """Test relationship discovery success"""
         from core.models import TableMetadata, Relationship
 
         mock_scan.return_value = [TableMetadata(table_name="test", table_comment=None, engine="InnoDB", columns=[])]

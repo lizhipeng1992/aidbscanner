@@ -1,4 +1,4 @@
-"""API 请求/响应模型定义"""
+"""API request/response model definitions"""
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 from datetime import datetime
@@ -7,12 +7,12 @@ from core.models import ColumnType, DataCategory
 
 
 class DatabaseListResponse(BaseModel):
-    """数据库列表响应"""
+    """Database list response"""
     databases: List[str]
 
 
 class TableMetadataResponse(BaseModel):
-    """表元数据响应"""
+    """Table metadata response"""
     table_name: str
     table_comment: Optional[str] = None
     engine: str = "InnoDB"
@@ -20,20 +20,20 @@ class TableMetadataResponse(BaseModel):
 
 
 class TableListResponse(BaseModel):
-    """表列表响应"""
+    """Table list response"""
     database: str
     tables: List[TableMetadataResponse]
 
 
 class FieldSemanticRequest(BaseModel):
-    """字段语义分析请求"""
+    """Field semantic analysis request"""
     db_name: str
     table_name: str
     column_name: str
 
 
 class FieldSemanticResponse(BaseModel):
-    """字段语义响应"""
+    """Field semantic response"""
     id: str
     db_name: str
     table_name: str
@@ -48,14 +48,14 @@ class FieldSemanticResponse(BaseModel):
 
 
 class TableSemanticRequest(BaseModel):
-    """表语义分析请求"""
+    """Table semantic analysis request"""
     db_name: str
     table_name: str
     sample_size: int = Field(default=5, ge=1, le=20)
 
 
 class TableSemanticResponse(BaseModel):
-    """表语义响应"""
+    """Table semantic response"""
     table_name: str
     db_name: str
     chinese_name: Optional[str] = None
@@ -65,7 +65,7 @@ class TableSemanticResponse(BaseModel):
 
 
 class RelationshipResponse(BaseModel):
-    """关系响应"""
+    """Relationship response"""
     source_table: str
     source_column: str
     target_table: str
@@ -76,7 +76,7 @@ class RelationshipResponse(BaseModel):
 
 
 class RelationshipVerifyRequest(BaseModel):
-    """关系验证请求"""
+    """Relationship verification request"""
     db_name: str
     source_table: str
     source_column: str
@@ -85,23 +85,23 @@ class RelationshipVerifyRequest(BaseModel):
 
 
 class HealthResponse(BaseModel):
-    """健康检查响应"""
+    """Health check response"""
     status: str
     mysql: str
-    llm: str  # LLM 服务状态（ollama 或 openai）
-    llm_provider: Optional[str] = None  # 当前使用的 LLM 提供商
+    llm: str  # LLM service status (ollama or openai)
+    llm_provider: Optional[str] = None  # Currently used LLM provider
     timestamp: datetime = Field(default_factory=datetime.now)
 
 
 class ScanRequest(BaseModel):
-    """全量扫描请求"""
+    """Full scan request"""
     db_name: str
     sample_size: int = Field(default=5, ge=1, le=20)
     verify_relationships: bool = True
 
 
 class ScanProgressResponse(BaseModel):
-    """扫描进度响应"""
+    """Scan progress response"""
     status: str
     current: int
     total: int
@@ -109,10 +109,10 @@ class ScanProgressResponse(BaseModel):
     message: Optional[str] = None
 
 
-# ==================== 审核相关模型 ====================
+# ==================== Review Models ====================
 
 class ReviewPendingItem(BaseModel):
-    """待审核字段项"""
+    """Pending review field item"""
     id: str
     db_name: str
     table_name: str
@@ -127,50 +127,50 @@ class ReviewPendingItem(BaseModel):
 
 
 class ReviewPendingResponse(BaseModel):
-    """待审核列表响应"""
+    """Pending review list response"""
     total: int
     pending_fields: List[ReviewPendingItem]
 
 
 class ReviewSubmitRequest(BaseModel):
-    """提交审核请求"""
+    """Submit review request"""
     field_id: str  # db.table.column
     calibrated_by: str
     modifications: Optional[Dict[str, Any]] = None
 
 
 class ReviewRejectRequest(BaseModel):
-    """拒绝审核请求"""
+    """Reject review request"""
     field_id: str  # db.table.column
     reason: Optional[str] = None
 
 
 class ReviewModifyRequest(BaseModel):
-    """修改并确认请求"""
+    """Modify and confirm request"""
     field_id: str  # db.table.column
     calibrated_by: str
     modifications: Dict[str, Any]
 
 
 class ReviewResultResponse(BaseModel):
-    """审核结果响应"""
+    """Review result response"""
     success: bool
     field_id: str
     status: ColumnType
     message: Optional[str] = None
 
 
-# ==================== 查询相关模型 ====================
+# ==================== Query Models ====================
 
 class QueryRequest(BaseModel):
-    """自然语言查询请求"""
+    """Natural language query request"""
     question: str
     db_name: Optional[str] = None
     top_k: int = Field(default=10, ge=1, le=50)
 
 
 class QueryFieldResult(BaseModel):
-    """查询结果中的字段信息"""
+    """Field info in query result"""
     column_name: str
     table_name: str
     db_name: str
@@ -183,7 +183,7 @@ class QueryFieldResult(BaseModel):
 
 
 class QueryTableResult(BaseModel):
-    """查询结果中的表信息"""
+    """Table info in query result"""
     table_name: str
     db_name: str
     chinese_name: Optional[str] = None
@@ -193,7 +193,7 @@ class QueryTableResult(BaseModel):
 
 
 class QueryResponse(BaseModel):
-    """自然语言查询响应"""
+    """Natural language query response"""
     question: str
     answer: str
     relevant_fields: List[QueryFieldResult] = []
@@ -202,10 +202,10 @@ class QueryResponse(BaseModel):
     error_message: Optional[str] = None
 
 
-# ==================== 语义缓存相关模型 ====================
+# ==================== Semantic Cache Models ====================
 
 class FieldSemanticCacheResponse(BaseModel):
-    """字段语义缓存响应"""
+    """Field semantic cache response"""
     id: str
     db_name: str
     table_name: str
@@ -221,7 +221,7 @@ class FieldSemanticCacheResponse(BaseModel):
 
 
 class TableSemanticCacheResponse(BaseModel):
-    """表语义缓存响应"""
+    """Table semantic cache response"""
     id: str
     db_name: str
     table_name: str
