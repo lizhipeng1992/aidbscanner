@@ -5,7 +5,7 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 
 from .models import ColumnMetadata, TableMetadata, FieldSemantic, TableSemantic, Relationship, DataCategory, ColumnType
-from .scanner import MySQLScanner
+from .base_scanner import BaseDatabaseScanner
 from .llm_client import (
     LLMProvider,
     BaseLLMClient,
@@ -86,7 +86,7 @@ class ConsoleProgress:
     def _progress_bar(self, current: int, total: int, width: int = 20) -> str:
         """生成进度条"""
         filled = int(width * current / total) if total > 0 else 0
-        bar = "█" * filled + "░" * (width - filled)
+        bar = "#" * filled + "-" * (width - filled)
         return f"[{bar}]"
 
     def _log(self, progress_type: str, message: str):
@@ -102,7 +102,7 @@ class ConsoleProgress:
 class SemanticAnalyzer:
     """基于 LLM 的字段语义解析器"""
 
-    def __init__(self, scanner: Optional[MySQLScanner] = None, llm_client: Optional[BaseLLMClient] = None, progress: Optional[ConsoleProgress] = None):
+    def __init__(self, scanner: Optional[BaseDatabaseScanner] = None, llm_client: Optional[BaseLLMClient] = None, progress: Optional[ConsoleProgress] = None):
         """初始化语义解析器
 
         Args:

@@ -4,17 +4,25 @@ import json
 from typing import Optional, List, Dict, Any
 
 from config.settings import settings
-from core.scanner import MySQLScanner
 from core.semantic_analyzer import SemanticAnalyzer, ConsoleProgress
 from core.chroma_store import ChromaStore
 
 
-def get_scanner() -> MySQLScanner:
-    """Get MySQL scanner instance"""
-    return MySQLScanner()
+def get_scanner():
+    """Get scanner instance based on configured db_type"""
+    db_type = settings.db_type
+    if db_type == "gbase":
+        from core.gbase_scanner import GBaseScanner
+        return GBaseScanner()
+    elif db_type == "sqlserver":
+        from core.sqlserver_scanner import SQLServerScanner
+        return SQLServerScanner()
+    else:
+        from core.scanner import MySQLScanner
+        return MySQLScanner()
 
 
-def get_analyzer(scanner: Optional[MySQLScanner] = None) -> SemanticAnalyzer:
+def get_analyzer(scanner = None) -> SemanticAnalyzer:
     """Get semantic analyzer instance"""
     if scanner is None:
         scanner = get_scanner()
@@ -44,16 +52,16 @@ def health():
     """Check service health status"""
     from core.llm_client import LLMProvider
 
-    mysql_status = "unknown"
+    db_status = "unknown"
     llm_status = "unknown"
     llm_provider = settings.llm_provider.value
 
     try:
         scanner = get_scanner()
         scanner.list_databases()
-        mysql_status = "connected"
+        db_status = "connected"
     except Exception as e:
-        mysql_status = f"error: {e}"
+        db_status = f"error: {e}"
 
     # Check the corresponding LLM service based on configuration
     try:
@@ -75,10 +83,10 @@ def health():
     except Exception as e:
         llm_status = f"error: {e}"
 
-    status = "healthy" if mysql_status == "connected" and llm_status == "connected" else "unhealthy"
+    status = "healthy" if db_status == "connected" and llm_status == "connected" else "unhealthy"
     result = {
         "status": status,
-        "mysql": mysql_status,
+        "database": db_status,
         "llm": llm_status,
         "llm_provider": llm_provider,
     }

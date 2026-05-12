@@ -20,12 +20,13 @@ class Settings(BaseSettings):
         env_file = ".env"
         extra = "ignore"
 
-    # MySQL database configuration
-    mysql_host: str = "localhost"
-    mysql_port: int = 3306
-    mysql_user: str = "root"
-    mysql_password: str = ""
-    mysql_database: str = ""
+    # Database connection configuration
+    db_type: Literal["mysql", "gbase", "sqlserver"] = "mysql"
+    db_host: str = "localhost"
+    db_port: int = 3306
+    db_user: str = "root"
+    db_password: str = ""
+    db_database: str = ""
 
     # Milvus vector database configuration
     milvus_host: str = "localhost"

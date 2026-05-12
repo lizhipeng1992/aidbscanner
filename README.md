@@ -4,7 +4,7 @@
 
 ## 功能特性
 
-- **元数据扫描**：自动扫描数据库( 当前仅支持MySQL，待扩展 )的表结构和字段信息
+- **元数据扫描**：支持 MySQL、GBase 8s、SQL Server 多种数据库的表结构和字段信息扫描
 - **语义分析**：使用 LLM 分析字段和表的业务含义、生成中文名称和业务定义
 - **多模型支持**：支持 Ollama 本地模型和 OpenAI 格式接口（OpenAI、Azure、vLLM 等）
 - **关系发现**：基于命名规则和数据匹配率发现潜在的外键关系
@@ -18,7 +18,10 @@
 ### 环境要求
 
 - Python 3.10+
-- MySQL 5.7+ / 8.0+
+- 数据库（三选一）：
+  - **MySQL** 5.7+ / 8.0+（默认）
+  - **GBase 8s**（需安装 ODBC 驱动）
+  - **SQL Server** 2016+（需安装 pymssql）
 - LLM 服务（二选一）：
   - **Ollama** + 本地模型（推荐 `qwen2.5:7b`）
   - **OpenAI 格式接口**（OpenAI API、Azure OpenAI、vLLM 等）
@@ -38,7 +41,7 @@ pip install -r requirements.txt
 
 # 配置环境变量
 cp .env.example .env
-# 编辑 .env 文件，配置 MySQL 和 LLM 连接信息
+# 编辑 .env 文件，配置数据库和 LLM 连接信息
 ```
 
 安装后获得两个 CLI 命令：
@@ -50,12 +53,13 @@ cp .env.example .env
 编辑 `.env` 文件：
 
 ```env
-# MySQL 连接
-MYSQL_HOST=localhost
-MYSQL_PORT=3306
-MYSQL_USER=root
-MYSQL_PASSWORD=your_password
-MYSQL_DATABASE=
+# 数据库连接（DB_TYPE=mysql/gbase/sqlserver）
+DB_TYPE=mysql
+DB_HOST=localhost
+DB_PORT=3306
+DB_USER=root
+DB_PASSWORD=your_password
+DB_DATABASE=
 
 # Milvus 向量数据库（可选）
 MILVUS_HOST=localhost
@@ -121,7 +125,10 @@ aidbscanner/
 ├── core/                       # 核心模块
 │   ├── __init__.py
 │   ├── models.py              # 数据模型（ColumnMetadata, FieldSemantic 等）
+│   ├── base_scanner.py        # 扫描器抽象基类
 │   ├── scanner.py             # MySQL 扫描器
+│   ├── gbase_scanner.py       # GBase 8s 扫描器
+│   ├── sqlserver_scanner.py   # SQL Server 扫描器
 │   ├── semantic_analyzer.py   # LLM 语义分析器
 │   ├── llm_client.py          # LLM 客户端（Ollama/OpenAI）
 │   ├── embedding.py           # 文本向量化服务
@@ -147,7 +154,7 @@ aidbscanner/
 
 | 命令 | 描述 |
 |------|------|
-| `aidb-scan health` | 检查 MySQL 和 LLM 连接状态 |
+| `aidb-scan health` | 检查数据库和 LLM 连接状态 |
 | `aidb-scan databases` | 列出所有数据库 |
 | `aidb-scan tables <db>` | 列出指定数据库的表 |
 | `aidb-scan field <db> <table> <column>` | 分析单个字段语义 |
@@ -256,10 +263,21 @@ RUNTIME_MODE=review aidb-scan scan test_db
 ### Python SDK
 
 ```python
-from core.scanner import MySQLScanner
+from core.base_scanner import BaseDatabaseScanner
 from core.semantic_analyzer import SemanticAnalyzer
 
-scanner = MySQLScanner()
+# 根据 .env 中的 DB_TYPE 自动选择扫描器
+from config.settings import settings
+if settings.db_type == "gbase":
+    from core.gbase_scanner import GBaseScanner
+    scanner = GBaseScanner()
+elif settings.db_type == "sqlserver":
+    from core.sqlserver_scanner import SQLServerScanner
+    scanner = SQLServerScanner()
+else:
+    from core.scanner import MySQLScanner
+    scanner = MySQLScanner()
+
 analyzer = SemanticAnalyzer(scanner=scanner)
 
 with scanner:

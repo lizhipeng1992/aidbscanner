@@ -70,7 +70,7 @@ export interface RelationshipVerifyRequest {
 
 export interface HealthResponse {
   status: string;
-  mysql: string;
+  database: string;
   llm: string;
   llm_provider: string | null;
   timestamp: string;

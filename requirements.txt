@@ -1,5 +1,7 @@
 # Database
 mysql-connector-python>=8.0.0
+pyodbc>=5.0.0
+pymssql>=2.3.0
 sqlmodel>=0.0.14
 
 # Vector Database

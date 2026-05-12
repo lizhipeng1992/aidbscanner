@@ -94,15 +94,15 @@ export default function Dashboard() {
       {/* Health Status */}
       <Row gutter={[16, 16]}>
         <Col span={12}>
-          <Card size="small" title="MySQL 连接">
+          <Card size="small" title="数据库连接">
             <Space>
-              {health?.mysql === "connected" ? (
+              {health?.database === "connected" ? (
                 <CheckCircleOutlined style={{ color: "#52c41a" }} />
               ) : (
                 <CloseCircleOutlined style={{ color: "#ff4d4f" }} />
               )}
-              <Text>{health?.mysql || "未检查"}</Text>
-              {statusTag(health?.mysql ?? "")}
+              <Text>{health?.database || "未检查"}</Text>
+              {statusTag(health?.database ?? "")}
             </Space>
           </Card>
         </Col>

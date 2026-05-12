@@ -15,7 +15,7 @@ class TableMetadataResponse(BaseModel):
     """Table metadata response"""
     table_name: str
     table_comment: Optional[str] = None
-    engine: str = "InnoDB"
+    engine: Optional[str] = None
     columns: List[Dict[str, Any]]
 
 
@@ -87,7 +87,7 @@ class RelationshipVerifyRequest(BaseModel):
 class HealthResponse(BaseModel):
     """Health check response"""
     status: str
-    mysql: str
+    database: str
     llm: str  # LLM service status (ollama or openai)
     llm_provider: Optional[str] = None  # Currently used LLM provider
     timestamp: datetime = Field(default_factory=datetime.now)

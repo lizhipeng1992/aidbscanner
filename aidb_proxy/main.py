@@ -7,7 +7,6 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import JSONResponse
 
 from config.settings import settings
-from core.scanner import MySQLScanner
 from core.semantic_analyzer import SemanticAnalyzer
 from core.models import FieldSemantic, ColumnType, DataCategory
 from datetime import datetime
@@ -60,11 +59,20 @@ app = FastAPI(
 )
 
 
-def get_scanner() -> MySQLScanner:
-    return MySQLScanner()
+def get_scanner():
+    db_type = settings.db_type
+    if db_type == "gbase":
+        from core.gbase_scanner import GBaseScanner
+        return GBaseScanner()
+    elif db_type == "sqlserver":
+        from core.sqlserver_scanner import SQLServerScanner
+        return SQLServerScanner()
+    else:
+        from core.scanner import MySQLScanner
+        return MySQLScanner()
 
 
-def get_analyzer(scanner: Optional[MySQLScanner] = None) -> SemanticAnalyzer:
+def get_analyzer(scanner = None) -> SemanticAnalyzer:
     if scanner is None:
         scanner = get_scanner()
     return SemanticAnalyzer(scanner)
@@ -75,15 +83,15 @@ async def health_check():
     """Health check"""
     from core.llm_client import LLMProvider, create_llm_client, ChatMessage
 
-    mysql_status = "unknown"
+    db_status = "unknown"
     llm_status = "unknown"
 
     try:
         scanner = get_scanner()
         scanner.list_databases()
-        mysql_status = "connected"
+        db_status = "connected"
     except Exception as e:
-        mysql_status = f"error: {str(e)}"
+        db_status = f"error: {str(e)}"
 
     try:
         provider = settings.llm_provider
@@ -105,7 +113,7 @@ async def health_check():
 
     return HealthResponse(
         status="healthy",
-        mysql=mysql_status,
+        database=db_status,
         llm=llm_status,
         llm_provider=settings.llm_provider.value,
     )
